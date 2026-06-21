@@ -1,4 +1,16 @@
 Project implementation started
+Update 1.0.15
+- Replaced: Matchmaking server with PeerJS lobby rendezvous system (no central server needed).
+- Added: Persistent device ID (ANDROID_ID hash) for reliable blocking across sessions.
+- Added: Blocked users modal with unblock button (persists via localStorage).
+- Added: Known users list modal with connect button (auto-adds connected peers).
+- Added: Advanced network settings: IPv4 toggle, IPv6 toggle, TCP toggle, UDP toggle.
+- Added: Proxy TURN URL field for custom TURN/proxy servers.
+- Added: Lobby system: 30-second time-slot lobbies, host/client auto-pairing.
+- Added: Blocked/skipped filtering during lobby pairing.
+- Added: getPersistentId() bridge method for device-based identity.
+- Incremented version to 1.0.15 (v15).
+
 Update 1.0.14
 - Fixed: Matchmaking search now retries forever with increasing delays (2s-15s).
 - Fixed: Search retry shows attempt count in status text.

@@ -40,6 +40,22 @@ class WebViewBridge(
     }
 
     @JavascriptInterface
+    fun getPersistentId(): String {
+        return try {
+            val androidId = android.provider.Settings.Secure.getString(
+                activity.contentResolver,
+                android.provider.Settings.Secure.ANDROID_ID
+            )
+            val hash = androidId.hashCode().toUInt().toString(16).takeLast(8)
+            ErrorLogger.d("WebViewBridge", "Persistent ID requested: $hash")
+            hash
+        } catch (e: Exception) {
+            ErrorLogger.e("WebViewBridge", "WB007", "Failed to get persistent ID", e)
+            getDeviceId()
+        }
+    }
+
+    @JavascriptInterface
     fun copyToClipboard(text: String) {
         try {
             val clipboard = activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE)

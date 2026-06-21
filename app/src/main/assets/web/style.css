@@ -451,3 +451,48 @@ footer { padding: 0.5rem; background: #333; color: #888; font-family: monospace;
     font-size: 0.85rem;
     background: rgba(0,0,0,0.6);
 }
+
+.settings-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.settings-section h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+    color: var(--secondary-color);
+}
+
+.user-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+    gap: 0.5rem;
+}
+
+.list-item-id {
+    font-family: monospace;
+    font-size: 0.85rem;
+    flex: 1;
+    word-break: break-all;
+}
+
+.list-item-time {
+    font-size: 0.7rem;
+    color: var(--secondary-color);
+}
+
+.empty-list {
+    text-align: center;
+    color: var(--secondary-color);
+    padding: 1rem;
+    font-size: 0.9rem;
+}

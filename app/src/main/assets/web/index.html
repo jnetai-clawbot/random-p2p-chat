@@ -42,6 +42,10 @@
                     </div>
                     <button id="connect-random-btn" class="primary-btn full-width">Connect with Random User</button>
                     <button id="cancel-search-btn" class="secondary-btn full-width hidden">Cancel Search</button>
+                    <div class="button-group">
+                        <button id="show-blocked-btn" class="secondary-btn small-btn">Blocked Users</button>
+                        <button id="show-known-btn" class="secondary-btn small-btn">Known Users</button>
+                    </div>
                 </div>
             </section>
 
@@ -101,6 +105,28 @@
                 <div id="call-status-text" class="call-status-text">Connecting...</div>
             </div>
 
+            <!-- Blocked Users Modal -->
+            <div id="blocked-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Blocked Users</h2>
+                        <button id="close-blocked-btn" class="icon-btn">X</button>
+                    </div>
+                    <div id="blocked-list" class="user-list"></div>
+                </div>
+            </div>
+
+            <!-- Known Users Modal -->
+            <div id="known-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Known Users</h2>
+                        <button id="close-known-btn" class="icon-btn">X</button>
+                    </div>
+                    <div id="known-list" class="user-list"></div>
+                </div>
+            </div>
+
             <!-- Settings Modal -->
             <div id="settings-modal" class="modal hidden">
                 <div class="modal-content">
@@ -156,6 +182,41 @@
                             </label>
                         </div>
                     </div>
+                    <div class="settings-section">
+                        <h3>Network Settings</h3>
+                        <div class="setting-item">
+                            <span>IPv4</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-ipv4" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>IPv6</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-ipv6" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>TCP Transport</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-tcp" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>UDP Transport</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-udp" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label for="setting-proxy-url">Proxy TURN URL (advanced)</label>
+                            <input type="text" id="setting-proxy-url" placeholder="turn:proxy.example.com:3478">
+                        </div>
+                    </div>
                     <div class="connection-info">
                         <h3>Connection Info</h3>
                         <p>Public IP: <span id="public-ip">Detecting...</span></p>
@@ -167,7 +228,7 @@
             <section id="about-section">
                 <div class="card about-card">
                     <p>Made by <a href="https://jnetai.com" target="_blank">jnetai.com</a></p>
-                    <p>Version: <span id="app-version">1.0.14</span></p>
+                    <p>Version: <span id="app-version">1.0.15</span></p>
                     <div class="button-group">
                         <button id="check-update-btn" class="secondary-btn small-btn">Check for Update</button>
                         <button id="share-app-btn" class="secondary-btn small-btn">Share App</button>

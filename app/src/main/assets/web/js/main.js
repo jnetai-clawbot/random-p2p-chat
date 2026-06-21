@@ -13,18 +13,24 @@
         { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
     ];
 
+    const LOBBY_PREFIX = 'random-p2p-lobby-';
+    const LOBBY_SLOT_SECS = 30;
+
     let peer = null;
     let conn = null;
     let localId = null;
+    let persistentId = null;
     let qrCode = null;
     let remotePeerId = null;
     let isUserEndingChat = false;
-    let matchSocket = null;
     let isSearching = false;
     let searchRetryCount = 0;
     let searchRetryTimer = null;
+    let lobbyPeer = null;
+    let lobbyConn = null;
     let blockedPeers = new Set();
     let skippedPeers = new Set();
+    let knownPeers = new Map();
     let mediaCall = null;
     let localStream = null;
     let isInCall = false;
@@ -79,7 +85,15 @@
         hangupBtn: document.getElementById('hangup-btn'),
         callStatusText: document.getElementById('call-status-text'),
         voiceNoteIndicator: document.getElementById('voice-note-indicator'),
-        voiceNoteTimer: document.getElementById('voice-note-timer')
+        voiceNoteTimer: document.getElementById('voice-note-timer'),
+        blockedModal: document.getElementById('blocked-modal'),
+        blockedList: document.getElementById('blocked-list'),
+        closeBlockedBtn: document.getElementById('close-blocked-btn'),
+        knownModal: document.getElementById('known-modal'),
+        knownList: document.getElementById('known-list'),
+        closeKnownBtn: document.getElementById('close-known-btn'),
+        showBlockedBtn: document.getElementById('show-blocked-btn'),
+        showKnownBtn: document.getElementById('show-known-btn')
     };
 
     const settings = {
@@ -89,13 +103,18 @@
         saveFolder: document.getElementById('setting-save-folder'),
         vibrate: document.getElementById('setting-vibrate'),
         useTurn: document.getElementById('setting-use-turn'),
-        debug: document.getElementById('setting-debug')
+        debug: document.getElementById('setting-debug'),
+        ipv4: document.getElementById('setting-ipv4'),
+        ipv6: document.getElementById('setting-ipv6'),
+        tcp: document.getElementById('setting-tcp'),
+        udp: document.getElementById('setting-udp'),
+        proxyUrl: document.getElementById('setting-proxy-url')
     };
 
     const GITHUB_REPO_URL = 'https://github.com/jnetai-clawbot/random-p2p-chat/releases';
-    const MATCHMAKING_SERVER = 'wss://random-p2p-chat-server.glitch.me';
-
     const SETTINGS_KEY = 'p2pchat_settings';
+    const BLOCKED_KEY = 'p2pchat_blocked';
+    const KNOWN_KEY = 'p2pchat_known';
 
     function loadSettings() {
         try {
@@ -108,6 +127,11 @@
                 if (saved.useTurn !== undefined) settings.useTurn.checked = saved.useTurn;
                 if (saved.debug !== undefined) settings.debug.checked = saved.debug;
                 if (saved.saveFolder !== undefined) settings.saveFolder.value = saved.saveFolder;
+                if (saved.ipv4 !== undefined) settings.ipv4.checked = saved.ipv4;
+                if (saved.ipv6 !== undefined) settings.ipv6.checked = saved.ipv6;
+                if (saved.tcp !== undefined) settings.tcp.checked = saved.tcp;
+                if (saved.udp !== undefined) settings.udp.checked = saved.udp;
+                if (saved.proxyUrl !== undefined) settings.proxyUrl.value = saved.proxyUrl;
             }
         } catch (e) { /* ignore */ }
     }
@@ -121,8 +145,43 @@
                 vibrate: settings.vibrate.checked,
                 useTurn: settings.useTurn.checked,
                 debug: settings.debug.checked,
-                saveFolder: settings.saveFolder.value
+                saveFolder: settings.saveFolder.value,
+                ipv4: settings.ipv4.checked,
+                ipv6: settings.ipv6.checked,
+                tcp: settings.tcp.checked,
+                udp: settings.udp.checked,
+                proxyUrl: settings.proxyUrl.value
             }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function loadBlockedPeers() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(BLOCKED_KEY));
+            if (saved && Array.isArray(saved)) {
+                blockedPeers = new Set(saved);
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function saveBlockedPeers() {
+        try {
+            localStorage.setItem(BLOCKED_KEY, JSON.stringify([...blockedPeers]));
+        } catch (e) { /* ignore */ }
+    }
+
+    function loadKnownPeers() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(KNOWN_KEY));
+            if (saved && typeof saved === 'object') {
+                knownPeers = new Map(Object.entries(saved));
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function saveKnownPeers() {
+        try {
+            localStorage.setItem(KNOWN_KEY, JSON.stringify(Object.fromEntries(knownPeers)));
         } catch (e) { /* ignore */ }
     }
 
@@ -141,7 +200,7 @@
     }
 
     function detectNetwork() {
-        elements.webrtcSupport.textContent = (window.RTCPeerConnection) ? "✅ Supported" : "❌ Not Supported";
+        elements.webrtcSupport.textContent = (window.RTCPeerConnection) ? "Supported" : "Not Supported";
         fetch('https://api.ipify.org?format=json')
             .then(res => res.json())
             .then(data => { elements.publicIp.textContent = data.ip; })
@@ -154,35 +213,59 @@
         }
     }
 
+    function buildIceServers() {
+        const servers = [];
+        if (settings.ipv4.checked) {
+            servers.push(...STUN_SERVERS);
+        }
+        if (settings.useTurn.checked) {
+            const turns = [...TURN_SERVERS];
+            if (!settings.udp.checked) {
+                for (let i = turns.length - 1; i >= 0; i--) {
+                    if (!turns[i].urls.includes('transport=tcp')) {
+                        turns.splice(i, 1);
+                    }
+                }
+            }
+            if (!settings.tcp.checked) {
+                for (let i = turns.length - 1; i >= 0; i--) {
+                    if (turns[i].urls.includes('transport=tcp')) {
+                        turns.splice(i, 1);
+                    }
+                }
+            }
+            servers.push(...turns);
+        }
+        if (settings.proxyUrl.value.trim()) {
+            const proxy = settings.proxyUrl.value.trim();
+            servers.push({ urls: proxy });
+        }
+        return servers;
+    }
+
     function initPeer() {
         if (peer) peer.destroy();
         const idToUse = generateRandomId();
-        const iceServers = [...STUN_SERVERS];
-        if (settings.useTurn.checked) iceServers.push(...TURN_SERVERS);
-        
-        peer = new Peer(idToUse, { 
-            config: { iceServers: iceServers, iceTransportPolicy: 'all' }, 
-            debug: 1 
+        const iceServers = buildIceServers();
+        peer = new Peer(idToUse, {
+            config: { iceServers: iceServers, iceTransportPolicy: 'all' },
+            debug: 1
         });
-
         peer.on('open', (id) => {
             localId = id;
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
         });
-
         peer.on('connection', (connection) => {
             if (conn) { connection.close(); return; }
             setupConnection(connection);
         });
-
         peer.on('call', (call) => {
             log(`Incoming call from ${call.peer}`);
             if (isInCall) { call.close(); return; }
             answerIncomingCall(call);
         });
-
         peer.on('error', (err) => {
             log(`Peer error: ${err.type}`, true);
             if (err.type === 'unavailable-id') initPeer();
@@ -202,15 +285,13 @@
         conn = connection;
         remotePeerId = conn.peer;
         isUserEndingChat = false;
-        
         conn.on('open', () => {
             updateStatus(`Connected to ${conn.peer}`, 'status-connected');
             showChat();
             addMessage(`System: Connected to ${conn.peer}`, 'system');
+            addKnownPeer(conn.peer);
         });
-
         conn.on('data', handleReceivedData);
-
         conn.on('close', () => {
             updateStatus('Disconnected', 'status-disconnected');
             addMessage('System: Connection closed', 'system');
@@ -241,7 +322,7 @@
             if (window.AndroidBridge) {
                 window.AndroidBridge.saveReceivedFile(data.name, data.data, folder);
             }
-            addMessage(`Received: ${data.name}` + (folder ? ` → Downloads/${folder}` : ''), 'system');
+            addMessage(`Received: ${data.name}` + (folder ? ` -> Downloads/${folder}` : ''), 'system');
         }
     }
 
@@ -255,7 +336,7 @@
         const msgDiv = elements.chatMessages.lastElementChild;
         if (msgDiv) {
             const playBtn = document.createElement('button');
-            playBtn.textContent = '▶ Play';
+            playBtn.textContent = 'Play';
             playBtn.className = 'play-voice-btn';
             playBtn.onclick = () => {
                 audio.currentTime = 0;
@@ -305,111 +386,9 @@
         setTimeout(() => document.body.classList.remove('shake'), 500);
     }
 
-    function connectMatchmaking() {
-        if (matchSocket && matchSocket.readyState === WebSocket.OPEN) return;
-        try {
-            matchSocket = new WebSocket(MATCHMAKING_SERVER);
-            matchSocket.onopen = () => {
-                log('Matchmaking server connected');
-                searchRetryCount = 0;
-                if (localId) matchSocket.send(JSON.stringify({ type: 'register', peerId: localId }));
-            };
-            matchSocket.onmessage = (event) => {
-                try {
-                    const msg = JSON.parse(event.data);
-                    handleMatchMessage(msg);
-                } catch (e) {
-                    log(`Matchmaking parse error: ${e.message}`, true);
-                }
-            };
-            matchSocket.onclose = () => {
-                log('Matchmaking server disconnected');
-                matchSocket = null;
-                if (isSearching) {
-                    scheduleSearchRetry();
-                }
-            };
-            matchSocket.onerror = (err) => {
-                log('Matchmaking server error', true);
-                matchSocket = null;
-                if (isSearching) {
-                    scheduleSearchRetry();
-                }
-            };
-        } catch (e) {
-            log(`Matchmaking connection failed: ${e.message}`, true);
-            matchSocket = null;
-            if (isSearching) {
-                scheduleSearchRetry();
-            }
-        }
-    }
-
-    function scheduleSearchRetry() {
-        if (!isSearching) return;
-        searchRetryCount++;
-        const delay = Math.min(searchRetryCount * 2000, 15000);
-        elements.searchStatusText.textContent = `Searching for a random user... (retry ${searchRetryCount})`;
-        log(`Retrying matchmaking in ${delay/1000}s (attempt ${searchRetryCount})`);
-        clearTimeout(searchRetryTimer);
-        searchRetryTimer = setTimeout(() => {
-            if (isSearching) {
-                connectMatchmaking();
-                const tryRegister = () => {
-                    if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-                        matchSocket.send(JSON.stringify({ type: 'register', peerId: localId }));
-                        matchSocket.send(JSON.stringify({ type: 'search' }));
-                    } else if (isSearching) {
-                        setTimeout(tryRegister, 1000);
-                    }
-                };
-                tryRegister();
-            }
-        }, delay);
-    }
-
-    function handleMatchMessage(msg) {
-        switch (msg.type) {
-            case 'registered':
-                log('Registered with matchmaking server');
-                break;
-            case 'searching':
-                log(`Searching for random user... (${msg.poolSize} users in pool)`);
-                break;
-            case 'matched':
-                log(`Matched with random user: ${msg.peerId}`);
-                isSearching = false;
-                updateSearchUI(false);
-                if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-                    matchSocket.send(JSON.stringify({ type: 'paired', peerId: msg.peerId }));
-                }
-                connectToPeer(msg.peerId);
-                break;
-            case 'search_cancelled':
-                log('Search cancelled');
-                break;
-            case 'blocked':
-                log(`Blocked user: ${msg.blockedPeerId}`);
-                blockedPeers.add(msg.blockedPeerId);
-                break;
-            case 'skipped':
-                log(`Skipped user: ${msg.skippedPeerId}`);
-                skippedPeers.add(msg.skippedPeerId);
-                break;
-            case 'peer_disconnected':
-                log(`Peer disconnected: ${msg.reason}`);
-                if (conn) {
-                    isUserEndingChat = true;
-                    conn.close();
-                }
-                break;
-            case 'peer_disconnected_ack':
-                log('Peer disconnect acknowledged');
-                break;
-            case 'error':
-                log(`Matchmaking error [${msg.code}]: ${msg.message}`, true);
-                break;
-        }
+    function getLobbyId() {
+        const slot = Math.floor(Date.now() / (LOBBY_SLOT_SECS * 1000));
+        return LOBBY_PREFIX + slot;
     }
 
     function startRandomSearch() {
@@ -425,16 +404,7 @@
         isSearching = true;
         searchRetryCount = 0;
         updateSearchUI(true);
-        connectMatchmaking();
-        const tryRegister = () => {
-            if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-                matchSocket.send(JSON.stringify({ type: 'register', peerId: localId }));
-                matchSocket.send(JSON.stringify({ type: 'search' }));
-            } else if (isSearching) {
-                setTimeout(tryRegister, 1000);
-            }
-        };
-        tryRegister();
+        joinLobby();
     }
 
     function cancelRandomSearch() {
@@ -444,9 +414,7 @@
         searchRetryTimer = null;
         searchRetryCount = 0;
         updateSearchUI(false);
-        if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-            matchSocket.send(JSON.stringify({ type: 'cancel_search' }));
-        }
+        leaveLobby();
     }
 
     function updateSearchUI(searching) {
@@ -462,13 +430,149 @@
         }
     }
 
+    function joinLobby() {
+        if (!isSearching) return;
+        const lobbyId = getLobbyId();
+        log(`Joining lobby: ${lobbyId}`);
+        if (lobbyPeer) { lobbyPeer.destroy(); lobbyPeer = null; }
+        lobbyConn = null;
+        const iceServers = buildIceServers();
+        lobbyPeer = new Peer(lobbyId, {
+            config: { iceServers: iceServers, iceTransportPolicy: 'all' },
+            debug: 0
+        });
+        lobbyPeer.on('open', () => {
+            log(`Became lobby host: ${lobbyId}`);
+            elements.searchStatusText.textContent = 'Hosting lobby, waiting for users...';
+            lobbyPeer.on('connection', (conn) => {
+                handleLobbyConnection(conn);
+            });
+        });
+        lobbyPeer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+                log(`Lobby ${lobbyId} already has a host, connecting as client`);
+                lobbyPeer.destroy();
+                lobbyPeer = null;
+                connectToLobbyHost(lobbyId);
+            } else {
+                log(`Lobby error: ${err.type}`, true);
+                lobbyPeer.destroy();
+                lobbyPeer = null;
+                if (isSearching) scheduleLobbyRetry();
+            }
+        });
+    }
+
+    let lobbyQueue = [];
+
+    function handleLobbyConnection(conn) {
+        conn.on('open', () => {
+            conn.on('data', (data) => {
+                try {
+                    const msg = JSON.parse(data);
+                    if (msg.type === 'lobby_join') {
+                        const clientPeerId = msg.peerId;
+                        const clientPersistentId = msg.persistentId;
+                        if (blockedPeers.has(clientPersistentId)) {
+                            conn.send(JSON.stringify({ type: 'lobby_reject', reason: 'blocked' }));
+                            conn.close();
+                            return;
+                        }
+                        lobbyQueue.push({ conn: conn, peerId: clientPeerId, persistentId: clientPersistentId });
+                        log(`Lobby client joined: ${clientPeerId}`);
+                        tryPairLobbyClients();
+                    }
+                } catch (e) {}
+            });
+            conn.on('close', () => {
+                lobbyQueue = lobbyQueue.filter(q => q.conn !== conn);
+            });
+        });
+    }
+
+    function tryPairLobbyClients() {
+        while (lobbyQueue.length >= 2) {
+            const a = lobbyQueue.shift();
+            const b = lobbyQueue.shift();
+            if (skippedPeers.has(b.persistentId) && !skippedPeers.has(a.persistentId)) {
+                lobbyQueue.unshift(b);
+                continue;
+            }
+            if (skippedPeers.has(a.persistentId) && !skippedPeers.has(b.persistentId)) {
+                lobbyQueue.unshift(a);
+                continue;
+            }
+            a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
+            b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+            setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+            setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+            log(`Paired: ${a.peerId} <-> ${b.peerId}`);
+        }
+    }
+
+    function connectToLobbyHost(lobbyId) {
+        if (!isSearching) return;
+        log(`Connecting to lobby host: ${lobbyId}`);
+        const conn = peer.connect(lobbyId, { reliable: true });
+        conn.on('open', () => {
+            lobbyConn = conn;
+            conn.send(JSON.stringify({
+                type: 'lobby_join',
+                peerId: localId,
+                persistentId: persistentId
+            }));
+            elements.searchStatusText.textContent = 'Waiting in lobby for a match...';
+        });
+        conn.on('data', (data) => {
+            try {
+                const msg = JSON.parse(data);
+                if (msg.type === 'lobby_paired') {
+                    log(`Lobby matched with: ${msg.peerId}`);
+                    isSearching = false;
+                    updateSearchUI(false);
+                    leaveLobby();
+                    connectToPeer(msg.peerId);
+                } else if (msg.type === 'lobby_reject') {
+                    log(`Lobby rejected: ${msg.reason}`, true);
+                    leaveLobby();
+                    if (isSearching) scheduleLobbyRetry();
+                }
+            } catch (e) {}
+        });
+        conn.on('close', () => {
+            lobbyConn = null;
+            if (isSearching) scheduleLobbyRetry();
+        });
+        conn.on('error', () => {
+            lobbyConn = null;
+            if (isSearching) scheduleLobbyRetry();
+        });
+    }
+
+    function leaveLobby() {
+        if (lobbyConn) { try { lobbyConn.close(); } catch(e) {} lobbyConn = null; }
+        if (lobbyPeer) { try { lobbyPeer.destroy(); } catch(e) {} lobbyPeer = null; }
+        lobbyQueue = [];
+    }
+
+    function scheduleLobbyRetry() {
+        if (!isSearching) return;
+        searchRetryCount++;
+        const delay = Math.min(searchRetryCount * 2000, 15000);
+        elements.searchStatusText.textContent = `Searching... (retry ${searchRetryCount})`;
+        log(`Lobby retry in ${delay/1000}s (attempt ${searchRetryCount})`);
+        clearTimeout(searchRetryTimer);
+        searchRetryTimer = setTimeout(() => {
+            if (isSearching) joinLobby();
+        }, delay);
+    }
+
     function blockCurrentPeer() {
         if (!remotePeerId) return;
         if (isInCall) endCall();
+        if (persistentId) blockedPeers.add(persistentId);
         blockedPeers.add(remotePeerId);
-        if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-            matchSocket.send(JSON.stringify({ type: 'block', peerId: remotePeerId }));
-        }
+        saveBlockedPeers();
         if (conn) {
             isUserEndingChat = true;
             conn.close();
@@ -484,9 +588,6 @@
         if (!remotePeerId) return;
         if (isInCall) endCall();
         skippedPeers.add(remotePeerId);
-        if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-            matchSocket.send(JSON.stringify({ type: 'skip', peerId: remotePeerId }));
-        }
         if (conn) {
             isUserEndingChat = true;
             conn.close();
@@ -501,9 +602,6 @@
     function endCurrentChat() {
         if (!remotePeerId) return;
         if (isInCall) endCall();
-        if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
-            matchSocket.send(JSON.stringify({ type: 'disconnect_peer' }));
-        }
         if (conn) {
             isUserEndingChat = true;
             conn.close();
@@ -511,6 +609,61 @@
         hideChat();
         conn = null;
         remotePeerId = null;
+    }
+
+    function addKnownPeer(peerId) {
+        if (!peerId) return;
+        knownPeers.set(peerId, new Date().toISOString());
+        saveKnownPeers();
+    }
+
+    function showBlockedModal() {
+        elements.blockedList.innerHTML = '';
+        if (blockedPeers.size === 0) {
+            elements.blockedList.innerHTML = '<p class="empty-list">No blocked users</p>';
+        } else {
+            for (const id of blockedPeers) {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `<span class="list-item-id">${id}</span>`;
+                const unblockBtn = document.createElement('button');
+                unblockBtn.className = 'small-btn secondary-btn';
+                unblockBtn.textContent = 'Unblock';
+                unblockBtn.onclick = () => {
+                    blockedPeers.delete(id);
+                    saveBlockedPeers();
+                    showBlockedModal();
+                };
+                item.appendChild(unblockBtn);
+                elements.blockedList.appendChild(item);
+            }
+        }
+        elements.blockedModal.classList.remove('hidden');
+    }
+
+    function showKnownModal() {
+        elements.knownList.innerHTML = '';
+        if (knownPeers.size === 0) {
+            elements.knownList.innerHTML = '<p class="empty-list">No known users yet</p>';
+        } else {
+            const entries = [...knownPeers.entries()].sort((a, b) => b[1].localeCompare(a[1]));
+            for (const [id, time] of entries) {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                const date = new Date(time).toLocaleDateString();
+                item.innerHTML = `<span class="list-item-id">${id}</span><span class="list-item-time">${date}</span>`;
+                const connectBtn = document.createElement('button');
+                connectBtn.className = 'small-btn primary-btn';
+                connectBtn.textContent = 'Connect';
+                connectBtn.onclick = () => {
+                    elements.knownModal.classList.add('hidden');
+                    connectToPeer(id);
+                };
+                item.appendChild(connectBtn);
+                elements.knownList.appendChild(item);
+            }
+        }
+        elements.knownModal.classList.remove('hidden');
     }
 
     function startVoiceNote() {
@@ -572,12 +725,16 @@
     }
 
     function startCall(withVideo) {
-        if (!conn || !conn.open || isInCall) return;
+        if (!conn || !conn.open || isInCall) {
+            log(`Call blocked: conn=${!!conn} open=${conn&&conn.open} inCall=${isInCall}`, true);
+            return;
+        }
         isInCall = true;
         isCallInitiator = true;
         const constraints = withVideo
             ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
             : { audio: true, video: false };
+        log(`Starting ${withVideo?'video':'voice'} call to ${remotePeerId}`);
         navigator.mediaDevices.getUserMedia(constraints).then(stream => {
             localStream = stream;
             elements.localVideo.srcObject = stream;
@@ -586,10 +743,12 @@
             elements.callOverlay.classList.remove('hidden');
             elements.callStatusText.textContent = 'Calling...';
             elements.toggleCamBtn.classList.toggle('hidden', !withVideo);
-            mediaCall = peer.call(remotePeerId, stream);
+            const callOpts = withVideo ? { metadata: { video: true } } : {};
+            mediaCall = peer.call(remotePeerId, stream, callOpts);
+            log(`Call initiated, waiting for answer`);
             setupMediaCall(mediaCall);
         }).catch(err => {
-            log(`Call error: ${err.message}`, true);
+            log(`Call media error: ${err.message}`, true);
             isInCall = false;
             isCallInitiator = false;
         });
@@ -597,20 +756,22 @@
 
     function setupMediaCall(call) {
         call.on('stream', (remoteStream) => {
+            log('Remote stream received');
             elements.remoteVideo.srcObject = remoteStream;
             elements.callStatusText.textContent = 'Connected';
-            log('Call connected');
         });
         call.on('close', () => {
+            log('Call closed by remote');
             endCall();
         });
         call.on('error', (err) => {
-            log(`Call error: ${err.message}`, true);
+            log(`Call error: ${err.message || err}`, true);
             endCall();
         });
     }
 
     function answerIncomingCall(call) {
+        log(`Incoming call from ${call.peer}, metadata: ${JSON.stringify(call.metadata)}`);
         if (isInCall) { call.close(); return; }
         isInCall = true;
         isCallInitiator = false;
@@ -627,9 +788,10 @@
             elements.callStatusText.textContent = 'Connected';
             elements.toggleCamBtn.classList.toggle('hidden', !isVideo);
             call.answer(stream);
+            log(`Answered ${isVideo?'video':'voice'} call`);
             setupMediaCall(call);
         }).catch(err => {
-            log(`Answer call error: ${err.message}`, true);
+            log(`Answer call media error: ${err.message}`, true);
             call.close();
             isInCall = false;
         });
@@ -658,7 +820,7 @@
         if (audioTrack) {
             audioTrack.enabled = !audioTrack.enabled;
             elements.toggleMicBtn.classList.toggle('active', audioTrack.enabled);
-            elements.toggleMicBtn.textContent = audioTrack.enabled ? '🎤' : '🔇';
+            elements.toggleMicBtn.textContent = audioTrack.enabled ? 'Mic' : 'Muted';
         }
     }
 
@@ -668,7 +830,7 @@
         if (videoTrack) {
             videoTrack.enabled = !videoTrack.enabled;
             elements.toggleCamBtn.classList.toggle('active', videoTrack.enabled);
-            elements.toggleCamBtn.textContent = videoTrack.enabled ? '📷' : '📸';
+            elements.toggleCamBtn.textContent = videoTrack.enabled ? 'Cam' : 'Cam Off';
         }
     }
 
@@ -679,10 +841,9 @@
             elements.remoteVideo.setSinkId(isSpeaker ? 'speaker' : '').catch(() => {});
         }
         elements.toggleSpeakerBtn.classList.toggle('active', isSpeaker);
-        elements.toggleSpeakerBtn.textContent = isSpeaker ? '🔊' : '🔈';
+        elements.toggleSpeakerBtn.textContent = isSpeaker ? 'Spkr' : 'Earpc';
     }
 
-    // Bridge hooks
     window.onQrScanResult = (res) => { elements.remoteIdInput.value = res; connectToPeer(res); };
     window.onFilePicked = (file) => {
         if (file && conn && conn.open) {
@@ -699,7 +860,6 @@
         }
     };
 
-    // UI Events
     elements.connectBtn.addEventListener('click', () => connectToPeer(elements.remoteIdInput.value.trim()));
     elements.sendBtn.addEventListener('click', () => {
         const text = elements.messageInput.value.trim();
@@ -714,8 +874,11 @@
     elements.skipBtn.addEventListener('click', skipCurrentPeer);
     elements.connectRandomBtn.addEventListener('click', startRandomSearch);
     elements.cancelSearchBtn.addEventListener('click', cancelRandomSearch);
+    elements.showBlockedBtn.addEventListener('click', showBlockedModal);
+    elements.closeBlockedBtn.addEventListener('click', () => elements.blockedModal.classList.add('hidden'));
+    elements.showKnownBtn.addEventListener('click', showKnownModal);
+    elements.closeKnownBtn.addEventListener('click', () => elements.knownModal.classList.add('hidden'));
 
-    // Save settings on any setting change
     function onSettingChange() { saveSettings(); }
     settings.autoReconnect.addEventListener('change', onSettingChange);
     settings.screenOn.addEventListener('change', () => { applyScreenSetting(); saveSettings(); });
@@ -723,6 +886,11 @@
     settings.vibrate.addEventListener('change', onSettingChange);
     settings.debug.addEventListener('change', onSettingChange);
     settings.saveFolder.addEventListener('change', onSettingChange);
+    settings.ipv4.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.ipv6.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.tcp.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.udp.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.proxyUrl.addEventListener('change', () => { saveSettings(); initPeer(); });
 
     elements.openSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
     elements.closeSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
@@ -731,8 +899,8 @@
     elements.copyIdBtn.addEventListener('click', () => {
         if (localId) {
             if (window.AndroidBridge) window.AndroidBridge.copyToClipboard(localId);
-            elements.copyIdBtn.textContent = '✅';
-            setTimeout(() => elements.copyIdBtn.textContent = '📋', 2000);
+            elements.copyIdBtn.textContent = 'Copied';
+            setTimeout(() => elements.copyIdBtn.textContent = 'Copy', 2000);
         }
     });
     elements.pickFileBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.pickFile());
@@ -769,7 +937,12 @@
     settings.screenOn.addEventListener('change', applyScreenSetting);
 
     loadSettings();
+    loadBlockedPeers();
+    loadKnownPeers();
     detectNetwork();
+    if (window.AndroidBridge) {
+        persistentId = window.AndroidBridge.getPersistentId();
+    }
     initPeer();
-    applyScreenSetting(); // Default is ON
+    applyScreenSetting();
 })();

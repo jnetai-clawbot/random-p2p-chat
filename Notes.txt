@@ -13,4 +13,11 @@ APK at apk/p2p-random-chat.apk (v1.0.12, versionCode=12).
 GitHub release: https://github.com/jnetai-clawbot/random-p2p-chat/releases
 
 
+Package	com.p2pchat.app
+Label	Peer 2 Peer & File Transfer App
+Keystore	p2pchat.keystore
+Secrets	KEYSTORE_*
 
+Both install side-by-side, no overwriting, no cross-updating.
+
+Release at https://github.com/jnetai-clawbot/random-p2p-chat/releases.

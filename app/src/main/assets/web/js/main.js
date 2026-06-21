@@ -21,6 +21,8 @@
     let isUserEndingChat = false;
     let matchSocket = null;
     let isSearching = false;
+    let searchRetryCount = 0;
+    let searchRetryTimer = null;
     let blockedPeers = new Set();
     let skippedPeers = new Set();
     let mediaCall = null;
@@ -309,6 +311,7 @@
             matchSocket = new WebSocket(MATCHMAKING_SERVER);
             matchSocket.onopen = () => {
                 log('Matchmaking server connected');
+                searchRetryCount = 0;
                 if (localId) matchSocket.send(JSON.stringify({ type: 'register', peerId: localId }));
             };
             matchSocket.onmessage = (event) => {
@@ -323,20 +326,46 @@
                 log('Matchmaking server disconnected');
                 matchSocket = null;
                 if (isSearching) {
-                    isSearching = false;
-                    updateSearchUI(false);
-                    setTimeout(() => {
-                        if (isSearching) connectMatchmaking();
-                    }, 5000);
+                    scheduleSearchRetry();
                 }
             };
             matchSocket.onerror = (err) => {
                 log('Matchmaking server error', true);
+                matchSocket = null;
+                if (isSearching) {
+                    scheduleSearchRetry();
+                }
             };
         } catch (e) {
             log(`Matchmaking connection failed: ${e.message}`, true);
             matchSocket = null;
+            if (isSearching) {
+                scheduleSearchRetry();
+            }
         }
+    }
+
+    function scheduleSearchRetry() {
+        if (!isSearching) return;
+        searchRetryCount++;
+        const delay = Math.min(searchRetryCount * 2000, 15000);
+        elements.searchStatusText.textContent = `Searching for a random user... (retry ${searchRetryCount})`;
+        log(`Retrying matchmaking in ${delay/1000}s (attempt ${searchRetryCount})`);
+        clearTimeout(searchRetryTimer);
+        searchRetryTimer = setTimeout(() => {
+            if (isSearching) {
+                connectMatchmaking();
+                const tryRegister = () => {
+                    if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
+                        matchSocket.send(JSON.stringify({ type: 'register', peerId: localId }));
+                        matchSocket.send(JSON.stringify({ type: 'search' }));
+                    } else if (isSearching) {
+                        setTimeout(tryRegister, 1000);
+                    }
+                };
+                tryRegister();
+            }
+        }, delay);
     }
 
     function handleMatchMessage(msg) {
@@ -394,6 +423,7 @@
             return;
         }
         isSearching = true;
+        searchRetryCount = 0;
         updateSearchUI(true);
         connectMatchmaking();
         const tryRegister = () => {
@@ -410,6 +440,9 @@
     function cancelRandomSearch() {
         if (!isSearching) return;
         isSearching = false;
+        clearTimeout(searchRetryTimer);
+        searchRetryTimer = null;
+        searchRetryCount = 0;
         updateSearchUI(false);
         if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
             matchSocket.send(JSON.stringify({ type: 'cancel_search' }));
@@ -709,7 +742,13 @@
             addMessage('Nudge sent!', 'system');
         }
     });
-    elements.checkUpdateBtn.addEventListener('click', () => window.open(GITHUB_REPO_URL, '_blank'));
+    elements.checkUpdateBtn.addEventListener('click', () => {
+        if (window.AndroidBridge) {
+            window.AndroidBridge.openUrl(GITHUB_REPO_URL);
+        } else {
+            window.open(GITHUB_REPO_URL, '_blank');
+        }
+    });
     elements.shareAppBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.shareApp(GITHUB_REPO_URL));
 
     elements.voiceNoteBtn.addEventListener('mousedown', startVoiceNote);

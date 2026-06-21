@@ -105,6 +105,19 @@ class WebViewBridge(
         activity.setKeepScreenOn(enabled)
     }
 
+    @JavascriptInterface
+    fun openUrl(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(intent)
+            ErrorLogger.i("WebViewBridge", "Opened URL in browser", mapOf("url" to url))
+        } catch (e: Exception) {
+            ErrorLogger.e("WebViewBridge", "WB006", "Failed to open URL", e)
+        }
+    }
+
     fun onQrScanResult(result: String) {
         webView.post {
             webView.evaluateJavascript("window.onQrScanResult('${escapeJs(result)}')", null)

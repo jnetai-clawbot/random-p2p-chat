@@ -1,4 +1,10 @@
 Project implementation started
+Update 1.0.14
+- Fixed: Matchmaking search now retries forever with increasing delays (2s-15s).
+- Fixed: Search retry shows attempt count in status text.
+- Fixed: Cancel search properly clears retry timer.
+- Incremented version to 1.0.14 (v14).
+
 Update 1.0.13
 - Changed: Package name to com.p2pchat.random (separate from p2p-chat app).
 - Changed: App label to "Random P2P Chat" for clear differentiation.

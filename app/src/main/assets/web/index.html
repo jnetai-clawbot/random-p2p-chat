@@ -64,17 +64,42 @@
                     <span id="progress-text">Sending file...</span>
                 </div>
                 <div id="input-area">
+                    <button id="voice-note-btn" class="icon-btn" title="Hold to Record Voice Note">🎤</button>
                     <button id="pick-file-btn" class="icon-btn" title="Send File">📎</button>
                     <input type="text" id="message-input" placeholder="Type a message...">
                     <button id="send-btn" class="primary-btn">Send</button>
                 </div>
                 <div id="nudge-area">
                     <button id="nudge-btn" class="secondary-btn">Nudge</button>
+                    <button id="voice-call-btn" class="primary-btn">Voice Call</button>
+                    <button id="video-call-btn" class="primary-btn">Video Call</button>
                     <button id="block-btn" class="danger-btn">Block</button>
                     <button id="skip-btn" class="secondary-btn">Skip</button>
                     <button id="end-chat-btn" class="danger-btn">End Chat</button>
                 </div>
             </section>
+
+            <!-- Voice Note Recording Indicator -->
+            <div id="voice-note-indicator" class="voice-note-indicator hidden">
+                <span class="recording-dot"></span>
+                <span id="voice-note-timer">00:00</span>
+                <span class="recording-hint">Release to send</span>
+            </div>
+
+            <!-- Call Overlay -->
+            <div id="call-overlay" class="call-overlay hidden">
+                <div class="call-video-container">
+                    <video id="remote-video" class="remote-video" autoplay playsinline></video>
+                    <video id="local-video" class="local-video" autoplay playsinline muted></video>
+                </div>
+                <div id="call-controls" class="call-controls">
+                    <button id="toggle-mic-btn" class="call-btn active" title="Mute Mic">🎤</button>
+                    <button id="toggle-cam-btn" class="call-btn active" title="Turn Off Camera">📷</button>
+                    <button id="toggle-speaker-btn" class="call-btn active" title="Speaker">🔊</button>
+                    <button id="hangup-btn" class="call-btn danger" title="Hang Up">📞</button>
+                </div>
+                <div id="call-status-text" class="call-status-text">Connecting...</div>
+            </div>
 
             <!-- Settings Modal -->
             <div id="settings-modal" class="modal hidden">
@@ -142,7 +167,7 @@
             <section id="about-section">
                 <div class="card about-card">
                     <p>Made by <a href="https://jnetai.com" target="_blank">jnetai.com</a></p>
-                    <p>Version: <span id="app-version">1.0.11</span></p>
+                    <p>Version: <span id="app-version">1.0.12</span></p>
                     <div class="button-group">
                         <button id="check-update-btn" class="secondary-btn small-btn">Check for Update</button>
                         <button id="share-app-btn" class="secondary-btn small-btn">Share App</button>

@@ -183,7 +183,7 @@ button:active {
 .message-system { align-self: center; background-color: rgba(0,0,0,0.05); font-size: 0.8rem; color: var(--secondary-color); text-align: center; max-width: 100%; border-radius: 4px; }
 
 #input-area { display: flex; gap: 0.5rem; align-items: center; }
-#nudge-area { margin-top: 0.5rem; display: flex; gap: 0.5rem; justify-content: center; }
+#nudge-area { margin-top: 0.5rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
 
 #transfer-progress { padding: 0.5rem; margin-bottom: 0.5rem; background: #fff; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
 .progress-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; margin-bottom: 4px; }
@@ -324,4 +324,130 @@ footer { padding: 0.5rem; background: #333; color: #888; font-family: monospace;
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+.voice-note-indicator {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--danger-color);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    z-index: 200;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-size: 0.9rem;
+}
+
+.recording-dot {
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.recording-hint {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+.play-voice-btn {
+    display: block;
+    margin-top: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    background: rgba(0,0,0,0.1);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-color);
+}
+
+.call-overlay {
+    position: fixed;
+    z-index: 150;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+
+.call-video-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.remote-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #111;
+}
+
+.local-video {
+    position: absolute;
+    bottom: 80px;
+    right: 16px;
+    width: 120px;
+    height: 160px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    background: #222;
+    z-index: 2;
+}
+
+.call-controls {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(0,0,0,0.8);
+}
+
+.call-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    transition: background 0.2s;
+}
+
+.call-btn.active {
+    background: rgba(255,255,255,0.3);
+}
+
+.call-btn.danger {
+    background: var(--danger-color);
+    width: 64px;
+    height: 64px;
+}
+
+.call-status-text {
+    text-align: center;
+    color: white;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    background: rgba(0,0,0,0.6);
 }

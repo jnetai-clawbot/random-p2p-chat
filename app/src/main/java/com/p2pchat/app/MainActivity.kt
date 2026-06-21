@@ -16,6 +16,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.webkit.PermissionRequest
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -58,8 +59,8 @@ class MainActivity : AppCompatActivity() {
         ErrorLogger.init(this)
         FileHandler.init(this)
         ErrorLogger.i("MainActivity", "onCreate started", mapOf(
-            "versionCode" to "11",
-            "versionName" to "1.0.11"
+            "versionCode" to "12",
+            "versionName" to "1.0.12"
         ))
 
         webView = WebView(this).apply {
@@ -149,6 +150,15 @@ class MainActivity : AppCompatActivity() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                 ErrorLogger.d("WebView", "[${consoleMessage.messageLevel()}] ${consoleMessage.message()}")
                 return true
+            }
+
+            override fun onPermissionRequest(request: PermissionRequest) {
+                runOnUiThread {
+                    request.grant(request.resources)
+                    ErrorLogger.i("MainActivity", "WebView permissions granted", mapOf(
+                        "resources" to request.resources.joinToString()
+                    ))
+                }
             }
 
             override fun onShowFileChooser(

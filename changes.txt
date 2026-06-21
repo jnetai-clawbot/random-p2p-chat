@@ -1,4 +1,17 @@
 Project implementation started
+Update 1.0.12
+- Added: Voice note recording (hold mic button to record, release to send via WebRTC data channel).
+- Added: Voice call (full duplex audio call between paired users using WebRTC media).
+- Added: Video call (full duplex audio+video call with front camera, picture-in-picture local preview).
+- Added: Call controls: mute mic, toggle camera, toggle speaker, hang up.
+- Added: Incoming call auto-answer with audio/video stream setup.
+- Added: RECORD_AUDIO and MODIFY_AUDIO_SETTINGS permissions to AndroidManifest.
+- Added: WebView permission request handler for camera/mic access.
+- Added: Voice note playback button on received voice messages.
+- Added: Call overlay UI with remote+local video, call controls, status text.
+- Added: Voice note recording indicator with timer and pulse animation.
+- Incremented version to 1.0.12 (v12).
+
 Update 1.0.11
 - Added: Random user pairing via matchmaking WebSocket server (server/index.js).
 - Added: "Connect with Random User" button that searches for other app users.

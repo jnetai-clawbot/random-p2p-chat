@@ -23,6 +23,14 @@
     let isSearching = false;
     let blockedPeers = new Set();
     let skippedPeers = new Set();
+    let mediaCall = null;
+    let localStream = null;
+    let isInCall = false;
+    let isCallInitiator = false;
+    let voiceNoteRecorder = null;
+    let voiceNoteChunks = [];
+    let voiceNoteTimer = null;
+    let voiceNoteSeconds = 0;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -56,7 +64,20 @@
         checkUpdateBtn: document.getElementById('check-update-btn'),
         shareAppBtn: document.getElementById('share-app-btn'),
         publicIp: document.getElementById('public-ip'),
-        webrtcSupport: document.getElementById('webrtc-support')
+        webrtcSupport: document.getElementById('webrtc-support'),
+        voiceNoteBtn: document.getElementById('voice-note-btn'),
+        voiceCallBtn: document.getElementById('voice-call-btn'),
+        videoCallBtn: document.getElementById('video-call-btn'),
+        callOverlay: document.getElementById('call-overlay'),
+        remoteVideo: document.getElementById('remote-video'),
+        localVideo: document.getElementById('local-video'),
+        toggleMicBtn: document.getElementById('toggle-mic-btn'),
+        toggleCamBtn: document.getElementById('toggle-cam-btn'),
+        toggleSpeakerBtn: document.getElementById('toggle-speaker-btn'),
+        hangupBtn: document.getElementById('hangup-btn'),
+        callStatusText: document.getElementById('call-status-text'),
+        voiceNoteIndicator: document.getElementById('voice-note-indicator'),
+        voiceNoteTimer: document.getElementById('voice-note-timer')
     };
 
     const settings = {
@@ -154,6 +175,12 @@
             setupConnection(connection);
         });
 
+        peer.on('call', (call) => {
+            log(`Incoming call from ${call.peer}`);
+            if (isInCall) { call.close(); return; }
+            answerIncomingCall(call);
+        });
+
         peer.on('error', (err) => {
             log(`Peer error: ${err.type}`, true);
             if (err.type === 'unavailable-id') initPeer();
@@ -201,6 +228,7 @@
                 const msg = JSON.parse(data);
                 if (msg.type === 'chat') addMessage(msg.text, 'received');
                 else if (msg.type === 'nudge') handleNudge();
+                else if (msg.type === 'voice_note') handleReceivedVoiceNote(msg);
             } catch (e) { addMessage(data, 'received'); }
         } else if (typeof data === 'object' && data.type === 'file') {
             if (!settings.allowFiles.checked) {
@@ -212,6 +240,26 @@
                 window.AndroidBridge.saveReceivedFile(data.name, data.data, folder);
             }
             addMessage(`Received: ${data.name}` + (folder ? ` → Downloads/${folder}` : ''), 'system');
+        }
+    }
+
+    function handleReceivedVoiceNote(msg) {
+        const audio = new Audio('data:' + (msg.mimeType || 'audio/webm') + ';base64,' + msg.data);
+        audio.oncanplaythrough = () => {
+            audio.play().catch(e => log(`Voice note play error: ${e.message}`, true));
+        };
+        const dur = msg.duration ? formatDuration(msg.duration) : '?';
+        addMessage(`Voice note (${dur})`, 'received');
+        const msgDiv = elements.chatMessages.lastElementChild;
+        if (msgDiv) {
+            const playBtn = document.createElement('button');
+            playBtn.textContent = '▶ Play';
+            playBtn.className = 'play-voice-btn';
+            playBtn.onclick = () => {
+                audio.currentTime = 0;
+                audio.play().catch(e => log(`Voice note play error: ${e.message}`, true));
+            };
+            msgDiv.appendChild(playBtn);
         }
     }
 
@@ -383,6 +431,7 @@
 
     function blockCurrentPeer() {
         if (!remotePeerId) return;
+        if (isInCall) endCall();
         blockedPeers.add(remotePeerId);
         if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
             matchSocket.send(JSON.stringify({ type: 'block', peerId: remotePeerId }));
@@ -400,6 +449,7 @@
 
     function skipCurrentPeer() {
         if (!remotePeerId) return;
+        if (isInCall) endCall();
         skippedPeers.add(remotePeerId);
         if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
             matchSocket.send(JSON.stringify({ type: 'skip', peerId: remotePeerId }));
@@ -417,6 +467,7 @@
 
     function endCurrentChat() {
         if (!remotePeerId) return;
+        if (isInCall) endCall();
         if (matchSocket && matchSocket.readyState === WebSocket.OPEN) {
             matchSocket.send(JSON.stringify({ type: 'disconnect_peer' }));
         }
@@ -427,6 +478,175 @@
         hideChat();
         conn = null;
         remotePeerId = null;
+    }
+
+    function startVoiceNote() {
+        if (!conn || !conn.open) return;
+        if (voiceNoteRecorder && voiceNoteRecorder.state === 'recording') return;
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            voiceNoteChunks = [];
+            voiceNoteSeconds = 0;
+            try {
+                voiceNoteRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+            } catch (e) {
+                voiceNoteRecorder = new MediaRecorder(stream);
+            }
+            voiceNoteRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) voiceNoteChunks.push(e.data);
+            };
+            voiceNoteRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(voiceNoteChunks, { type: voiceNoteRecorder.mimeType || 'audio/webm' });
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result.split(',')[1];
+                    if (conn && conn.open) {
+                        conn.send(JSON.stringify({ type: 'voice_note', data: base64, mimeType: blob.type, duration: voiceNoteSeconds }));
+                        addMessage(`Voice note (${formatDuration(voiceNoteSeconds)})`, 'sent');
+                    }
+                };
+                reader.readAsDataURL(blob);
+            };
+            voiceNoteRecorder.start(100);
+            elements.voiceNoteIndicator.classList.remove('hidden');
+            updateVoiceNoteTimer();
+            voiceNoteTimer = setInterval(updateVoiceNoteTimer, 1000);
+            log('Voice note recording started');
+        }).catch(err => {
+            log(`Voice note error: ${err.message}`, true);
+        });
+    }
+
+    function stopVoiceNote() {
+        if (!voiceNoteRecorder || voiceNoteRecorder.state !== 'recording') return;
+        voiceNoteRecorder.stop();
+        voiceNoteRecorder = null;
+        clearInterval(voiceNoteTimer);
+        voiceNoteTimer = null;
+        elements.voiceNoteIndicator.classList.add('hidden');
+        log('Voice note recording stopped');
+    }
+
+    function updateVoiceNoteTimer() {
+        voiceNoteSeconds++;
+        elements.voiceNoteTimer.textContent = formatDuration(voiceNoteSeconds);
+    }
+
+    function formatDuration(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+
+    function startCall(withVideo) {
+        if (!conn || !conn.open || isInCall) return;
+        isInCall = true;
+        isCallInitiator = true;
+        const constraints = withVideo
+            ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
+            : { audio: true, video: false };
+        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+            localStream = stream;
+            elements.localVideo.srcObject = stream;
+            if (!withVideo) elements.localVideo.classList.add('hidden');
+            else elements.localVideo.classList.remove('hidden');
+            elements.callOverlay.classList.remove('hidden');
+            elements.callStatusText.textContent = 'Calling...';
+            elements.toggleCamBtn.classList.toggle('hidden', !withVideo);
+            mediaCall = peer.call(remotePeerId, stream);
+            setupMediaCall(mediaCall);
+        }).catch(err => {
+            log(`Call error: ${err.message}`, true);
+            isInCall = false;
+            isCallInitiator = false;
+        });
+    }
+
+    function setupMediaCall(call) {
+        call.on('stream', (remoteStream) => {
+            elements.remoteVideo.srcObject = remoteStream;
+            elements.callStatusText.textContent = 'Connected';
+            log('Call connected');
+        });
+        call.on('close', () => {
+            endCall();
+        });
+        call.on('error', (err) => {
+            log(`Call error: ${err.message}`, true);
+            endCall();
+        });
+    }
+
+    function answerIncomingCall(call) {
+        if (isInCall) { call.close(); return; }
+        isInCall = true;
+        isCallInitiator = false;
+        const isVideo = call.metadata && call.metadata.video;
+        const constraints = isVideo
+            ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
+            : { audio: true, video: false };
+        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+            localStream = stream;
+            elements.localVideo.srcObject = stream;
+            if (!isVideo) elements.localVideo.classList.add('hidden');
+            else elements.localVideo.classList.remove('hidden');
+            elements.callOverlay.classList.remove('hidden');
+            elements.callStatusText.textContent = 'Connected';
+            elements.toggleCamBtn.classList.toggle('hidden', !isVideo);
+            call.answer(stream);
+            setupMediaCall(call);
+        }).catch(err => {
+            log(`Answer call error: ${err.message}`, true);
+            call.close();
+            isInCall = false;
+        });
+    }
+
+    function endCall() {
+        if (localStream) {
+            localStream.getTracks().forEach(t => t.stop());
+            localStream = null;
+        }
+        if (mediaCall) {
+            mediaCall.close();
+            mediaCall = null;
+        }
+        elements.remoteVideo.srcObject = null;
+        elements.localVideo.srcObject = null;
+        elements.callOverlay.classList.add('hidden');
+        isInCall = false;
+        isCallInitiator = false;
+        log('Call ended');
+    }
+
+    function toggleMic() {
+        if (!localStream) return;
+        const audioTrack = localStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            elements.toggleMicBtn.classList.toggle('active', audioTrack.enabled);
+            elements.toggleMicBtn.textContent = audioTrack.enabled ? '🎤' : '🔇';
+        }
+    }
+
+    function toggleCam() {
+        if (!localStream) return;
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            elements.toggleCamBtn.classList.toggle('active', videoTrack.enabled);
+            elements.toggleCamBtn.textContent = videoTrack.enabled ? '📷' : '📸';
+        }
+    }
+
+    function toggleSpeaker() {
+        if (!elements.remoteVideo) return;
+        const isSpeaker = elements.remoteVideo.audioOutputType !== 'speaker';
+        if (typeof elements.remoteVideo.setSinkId === 'function') {
+            elements.remoteVideo.setSinkId(isSpeaker ? 'speaker' : '').catch(() => {});
+        }
+        elements.toggleSpeakerBtn.classList.toggle('active', isSpeaker);
+        elements.toggleSpeakerBtn.textContent = isSpeaker ? '🔊' : '🔈';
     }
 
     // Bridge hooks
@@ -491,6 +711,20 @@
     });
     elements.checkUpdateBtn.addEventListener('click', () => window.open(GITHUB_REPO_URL, '_blank'));
     elements.shareAppBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.shareApp(GITHUB_REPO_URL));
+
+    elements.voiceNoteBtn.addEventListener('mousedown', startVoiceNote);
+    elements.voiceNoteBtn.addEventListener('mouseup', stopVoiceNote);
+    elements.voiceNoteBtn.addEventListener('mouseleave', stopVoiceNote);
+    elements.voiceNoteBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startVoiceNote(); });
+    elements.voiceNoteBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopVoiceNote(); });
+    elements.voiceNoteBtn.addEventListener('touchcancel', stopVoiceNote);
+
+    elements.voiceCallBtn.addEventListener('click', () => startCall(false));
+    elements.videoCallBtn.addEventListener('click', () => startCall(true));
+    elements.hangupBtn.addEventListener('click', endCall);
+    elements.toggleMicBtn.addEventListener('click', toggleMic);
+    elements.toggleCamBtn.addEventListener('click', toggleCam);
+    elements.toggleSpeakerBtn.addEventListener('click', toggleSpeaker);
 
     settings.useTurn.addEventListener('change', initPeer);
     settings.screenOn.addEventListener('change', applyScreenSetting);

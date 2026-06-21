@@ -1,4 +1,14 @@
 Project implementation started
+Update 1.0.18
+- Fixed: Permissions requested on startup (audio + camera) so calls work immediately.
+- Fixed: Removed false "call blocked" error — now shows specific reason.
+- Fixed: Incoming calls use pre-granted permissions, no delay.
+- Added: Individual Remove button for each known user in Known Users list.
+- Added: Remove All Blocked button in Blocked Users modal.
+- Added: Remove All Known button in Known Users modal.
+- Added: audioPermissionGranted/cameraPermissionGranted state tracking.
+- Incremented version to 1.0.18 (v18).
+
 Update 1.0.17
 - Fixed: Lobby host now registers itself in pairing queue so 1 host + 1 client auto-pair.
 - Fixed: Host connects directly to matched client instead of waiting for 2 clients.

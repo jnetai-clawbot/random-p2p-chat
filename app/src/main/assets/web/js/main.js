@@ -39,6 +39,8 @@
     let voiceNoteChunks = [];
     let voiceNoteTimer = null;
     let voiceNoteSeconds = 0;
+    let audioPermissionGranted = false;
+    let cameraPermissionGranted = false;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -93,7 +95,9 @@
         knownList: document.getElementById('known-list'),
         closeKnownBtn: document.getElementById('close-known-btn'),
         showBlockedBtn: document.getElementById('show-blocked-btn'),
-        showKnownBtn: document.getElementById('show-known-btn')
+        showKnownBtn: document.getElementById('show-known-btn'),
+        clearBlockedBtn: document.getElementById('clear-blocked-btn'),
+        clearKnownBtn: document.getElementById('clear-known-btn')
     };
 
     const settings = {
@@ -666,6 +670,30 @@
         elements.blockedModal.classList.remove('hidden');
     }
 
+    function showBlockedModal() {
+        elements.blockedList.innerHTML = '';
+        if (blockedPeers.size === 0) {
+            elements.blockedList.innerHTML = '<p class="empty-list">No blocked users</p>';
+        } else {
+            for (const id of blockedPeers) {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `<span class="list-item-id">${id}</span>`;
+                const unblockBtn = document.createElement('button');
+                unblockBtn.className = 'small-btn secondary-btn';
+                unblockBtn.textContent = 'Unblock';
+                unblockBtn.onclick = () => {
+                    blockedPeers.delete(id);
+                    saveBlockedPeers();
+                    showBlockedModal();
+                };
+                item.appendChild(unblockBtn);
+                elements.blockedList.appendChild(item);
+            }
+        }
+        elements.blockedModal.classList.remove('hidden');
+    }
+
     function showKnownModal() {
         elements.knownList.innerHTML = '';
         if (knownPeers.size === 0) {
@@ -685,6 +713,15 @@
                     connectToPeer(id);
                 };
                 item.appendChild(connectBtn);
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'small-btn danger-btn';
+                removeBtn.textContent = 'Remove';
+                removeBtn.onclick = () => {
+                    knownPeers.delete(id);
+                    saveKnownPeers();
+                    showKnownModal();
+                };
+                item.appendChild(removeBtn);
                 elements.knownList.appendChild(item);
             }
         }
@@ -756,28 +793,32 @@
     }
 
     function startCall(withVideo) {
-        if (!conn || !conn.open || isInCall) {
-            log(`Call blocked: conn=${!!conn} open=${conn&&conn.open} inCall=${isInCall}`, true);
+        if (!conn || !conn.open) {
+            log('Cannot start call: not connected to a peer', true);
+            return;
+        }
+        if (isInCall) {
+            log('Already in a call', true);
             return;
         }
         isInCall = true;
         isCallInitiator = true;
         const needsCamera = withVideo;
-        requestAudioPermission(() => {
-            if (needsCamera) {
-                requestCameraPermission(() => {
-                    doStartCall(withVideo);
-                }, () => {
-                    isInCall = false;
-                    isCallInitiator = false;
-                });
+        if (audioPermissionGranted) {
+            if (needsCamera && !cameraPermissionGranted) {
+                requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; });
             } else {
                 doStartCall(withVideo);
             }
-        }, () => {
-            isInCall = false;
-            isCallInitiator = false;
-        });
+        } else {
+            requestAudioPermission(() => {
+                if (needsCamera && !cameraPermissionGranted) {
+                    requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; });
+                } else {
+                    doStartCall(withVideo);
+                }
+            }, () => { isInCall = false; isCallInitiator = false; });
+        }
     }
 
     function doStartCall(withVideo) {
@@ -829,6 +870,22 @@
         const constraints = isVideo
             ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
             : { audio: true, video: false };
+        if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) {
+            doAnswerCall(call, constraints, isVideo);
+        } else if (!audioPermissionGranted) {
+            requestAudioPermission(() => {
+                if (isVideo && !cameraPermissionGranted) {
+                    requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; });
+                } else {
+                    doAnswerCall(call, constraints, isVideo);
+                }
+            }, () => { call.close(); isInCall = false; });
+        } else if (isVideo && !cameraPermissionGranted) {
+            requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; });
+        }
+    }
+
+    function doAnswerCall(call, constraints, isVideo) {
         navigator.mediaDevices.getUserMedia(constraints).then(stream => {
             localStream = stream;
             elements.localVideo.srcObject = stream;
@@ -920,6 +977,7 @@
     }
 
     window.onAudioPermissionResult = (granted) => {
+        audioPermissionGranted = granted;
         if (granted) {
             if (pendingAudioCallback) { pendingAudioCallback(); pendingAudioCallback = null; }
         } else {
@@ -929,6 +987,7 @@
     };
 
     window.onCameraPermissionResult = (granted) => {
+        cameraPermissionGranted = granted;
         if (granted) {
             if (pendingCameraCallback) { pendingCameraCallback(); pendingCameraCallback = null; }
         } else {
@@ -987,6 +1046,16 @@
     elements.closeBlockedBtn.addEventListener('click', () => elements.blockedModal.classList.add('hidden'));
     elements.showKnownBtn.addEventListener('click', showKnownModal);
     elements.closeKnownBtn.addEventListener('click', () => elements.knownModal.classList.add('hidden'));
+    elements.clearBlockedBtn.addEventListener('click', () => {
+        blockedPeers.clear();
+        saveBlockedPeers();
+        showBlockedModal();
+    });
+    elements.clearKnownBtn.addEventListener('click', () => {
+        knownPeers.clear();
+        saveKnownPeers();
+        showKnownModal();
+    });
 
     function onSettingChange() { saveSettings(); }
     settings.autoReconnect.addEventListener('change', onSettingChange);
@@ -1051,6 +1120,8 @@
     detectNetwork();
     if (window.AndroidBridge) {
         persistentId = window.AndroidBridge.getPersistentId();
+        window.AndroidBridge.requestAudioPermission();
+        window.AndroidBridge.requestCameraPermission();
     }
     initPeer();
     applyScreenSetting();

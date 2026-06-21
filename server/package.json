@@ -1,0 +1,12 @@
+{
+  "name": "p2p-random-chat-server",
+  "version": "1.0.0",
+  "description": "Matchmaking server for Random P2P Chat app",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

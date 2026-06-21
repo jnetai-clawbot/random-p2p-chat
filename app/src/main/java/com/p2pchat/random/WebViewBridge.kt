@@ -134,6 +134,18 @@ class WebViewBridge(
         }
     }
 
+    @JavascriptInterface
+    fun requestAudioPermission() {
+        ErrorLogger.i("WebViewBridge", "Audio permission requested")
+        activity.requestAudioPermission()
+    }
+
+    @JavascriptInterface
+    fun requestCameraPermission() {
+        ErrorLogger.i("WebViewBridge", "Camera permission requested")
+        activity.requestCameraPermission()
+    }
+
     fun onQrScanResult(result: String) {
         webView.post {
             webView.evaluateJavascript("window.onQrScanResult('${escapeJs(result)}')", null)

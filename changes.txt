@@ -1,4 +1,13 @@
 Project implementation started
+Update 1.0.16
+- Fixed: Runtime RECORD_AUDIO and CAMERA permission requests before voice/video calls.
+- Fixed: Voice notes now request audio permission before recording.
+- Fixed: Settings modal now scrollable (max-height 85vh, overflow-y auto).
+- Fixed: Back button closes settings/blocked/known modals instead of exiting app.
+- Added: requestAudioPermission() and requestCameraPermission() bridge methods.
+- Added: isModalOpen() and closeTopModal() JS functions for back button handling.
+- Incremented version to 1.0.16 (v16).
+
 Update 1.0.15
 - Replaced: Matchmaking server with PeerJS lobby rendezvous system (no central server needed).
 - Added: Persistent device ID (ANDROID_ID hash) for reliable blocking across sessions.

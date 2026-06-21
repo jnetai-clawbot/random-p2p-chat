@@ -669,6 +669,12 @@
     function startVoiceNote() {
         if (!conn || !conn.open) return;
         if (voiceNoteRecorder && voiceNoteRecorder.state === 'recording') return;
+        requestAudioPermission(() => {
+            doStartVoiceNote();
+        });
+    }
+
+    function doStartVoiceNote() {
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             voiceNoteChunks = [];
             voiceNoteSeconds = 0;
@@ -731,6 +737,25 @@
         }
         isInCall = true;
         isCallInitiator = true;
+        const needsCamera = withVideo;
+        requestAudioPermission(() => {
+            if (needsCamera) {
+                requestCameraPermission(() => {
+                    doStartCall(withVideo);
+                }, () => {
+                    isInCall = false;
+                    isCallInitiator = false;
+                });
+            } else {
+                doStartCall(withVideo);
+            }
+        }, () => {
+            isInCall = false;
+            isCallInitiator = false;
+        });
+    }
+
+    function doStartCall(withVideo) {
         const constraints = withVideo
             ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
             : { audio: true, video: false };
@@ -843,6 +868,65 @@
         elements.toggleSpeakerBtn.classList.toggle('active', isSpeaker);
         elements.toggleSpeakerBtn.textContent = isSpeaker ? 'Spkr' : 'Earpc';
     }
+
+    let pendingAudioCallback = null;
+    let pendingCameraCallback = null;
+    let pendingAudioFailCallback = null;
+    let pendingCameraFailCallback = null;
+
+    function requestAudioPermission(onGranted, onDenied) {
+        if (window.AndroidBridge) {
+            pendingAudioCallback = onGranted;
+            pendingAudioFailCallback = onDenied || (() => {});
+            window.AndroidBridge.requestAudioPermission();
+        } else {
+            onGranted();
+        }
+    }
+
+    function requestCameraPermission(onGranted, onDenied) {
+        if (window.AndroidBridge) {
+            pendingCameraCallback = onGranted;
+            pendingCameraFailCallback = onDenied || (() => {});
+            window.AndroidBridge.requestCameraPermission();
+        } else {
+            onGranted();
+        }
+    }
+
+    window.onAudioPermissionResult = (granted) => {
+        if (granted) {
+            if (pendingAudioCallback) { pendingAudioCallback(); pendingAudioCallback = null; }
+        } else {
+            log('Audio permission denied', true);
+            if (pendingAudioFailCallback) { pendingAudioFailCallback(); pendingAudioFailCallback = null; }
+        }
+    };
+
+    window.onCameraPermissionResult = (granted) => {
+        if (granted) {
+            if (pendingCameraCallback) { pendingCameraCallback(); pendingCameraCallback = null; }
+        } else {
+            log('Camera permission denied', true);
+            if (pendingCameraFailCallback) { pendingCameraFailCallback(); pendingCameraFailCallback = null; }
+        }
+    };
+
+    window.isModalOpen = () => {
+        return (!elements.settingsModal.classList.contains('hidden') ||
+                !elements.blockedModal.classList.contains('hidden') ||
+                !elements.knownModal.classList.contains('hidden')).toString();
+    };
+
+    window.closeTopModal = () => {
+        if (!elements.settingsModal.classList.contains('hidden')) {
+            elements.settingsModal.classList.add('hidden');
+        } else if (!elements.blockedModal.classList.contains('hidden')) {
+            elements.blockedModal.classList.add('hidden');
+        } else if (!elements.knownModal.classList.contains('hidden')) {
+            elements.knownModal.classList.add('hidden');
+        }
+    };
 
     window.onQrScanResult = (res) => { elements.remoteIdInput.value = res; connectToPeer(res); };
     window.onFilePicked = (file) => {

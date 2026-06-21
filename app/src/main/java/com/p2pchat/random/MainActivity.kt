@@ -1,6 +1,8 @@
 package com.p2pchat.random
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -23,6 +25,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.webkit.WebViewAssetLoader
 
 class MainActivity : AppCompatActivity() {
@@ -54,13 +58,25 @@ class MainActivity : AppCompatActivity() {
             filePickCallback = null
         }
 
+    private val audioPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            ErrorLogger.i("MainActivity", "Audio permission result: $granted")
+            webView.evaluateJavascript("window.onAudioPermissionResult($granted)", null)
+        }
+
+    private val cameraPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            ErrorLogger.i("MainActivity", "Camera permission result: $granted")
+            webView.evaluateJavascript("window.onCameraPermissionResult($granted)", null)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ErrorLogger.init(this)
         FileHandler.init(this)
         ErrorLogger.i("MainActivity", "onCreate started", mapOf(
-            "versionCode" to "15",
-            "versionName" to "1.0.15"
+            "versionCode" to "16",
+            "versionName" to "1.0.16"
         ))
 
         webView = WebView(this).apply {
@@ -80,7 +96,13 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                showExitConfirmation()
+                webView.evaluateJavascript("window.isModalOpen()", { result ->
+                    if (result == "true") {
+                        webView.evaluateJavascript("window.closeTopModal()", null)
+                    } else {
+                        showExitConfirmation()
+                    }
+                })
             }
         })
     }
@@ -211,6 +233,24 @@ class MainActivity : AppCompatActivity() {
                 window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
             ErrorLogger.i("MainActivity", "Keep screen on: $enabled")
+        }
+    }
+
+    fun requestAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED) {
+            webView.evaluateJavascript("window.onAudioPermissionResult(true)", null)
+        } else {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun requestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED) {
+            webView.evaluateJavascript("window.onCameraPermissionResult(true)", null)
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 

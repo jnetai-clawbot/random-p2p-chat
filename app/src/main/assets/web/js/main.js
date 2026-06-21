@@ -436,6 +436,7 @@
         log(`Joining lobby: ${lobbyId}`);
         if (lobbyPeer) { lobbyPeer.destroy(); lobbyPeer = null; }
         lobbyConn = null;
+        lobbyQueue = [];
         const iceServers = buildIceServers();
         lobbyPeer = new Peer(lobbyId, {
             config: { iceServers: iceServers, iceTransportPolicy: 'all' },
@@ -444,6 +445,12 @@
         lobbyPeer.on('open', () => {
             log(`Became lobby host: ${lobbyId}`);
             elements.searchStatusText.textContent = 'Hosting lobby, waiting for users...';
+            lobbyQueue.push({
+                conn: null,
+                peerId: localId,
+                persistentId: persistentId,
+                isHost: true
+            });
             lobbyPeer.on('connection', (conn) => {
                 handleLobbyConnection(conn);
             });
@@ -502,11 +509,29 @@
                 lobbyQueue.unshift(a);
                 continue;
             }
-            a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
-            b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
-            setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
-            setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
-            log(`Paired: ${a.peerId} <-> ${b.peerId}`);
+            if (a.isHost) {
+                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+                isSearching = false;
+                updateSearchUI(false);
+                leaveLobby();
+                connectToPeer(b.peerId);
+                log(`Host paired with client: ${a.peerId} <-> ${b.peerId}`);
+            } else if (b.isHost) {
+                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                isSearching = false;
+                updateSearchUI(false);
+                leaveLobby();
+                connectToPeer(a.peerId);
+                log(`Host paired with client: ${b.peerId} <-> ${a.peerId}`);
+            } else {
+                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
+                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+                log(`Paired: ${a.peerId} <-> ${b.peerId}`);
+            }
         }
     }
 

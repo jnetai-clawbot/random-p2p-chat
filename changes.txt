@@ -1,4 +1,12 @@
 Project implementation started
+Update 1.0.13
+- Changed: Package name to com.p2pchat.random (separate from p2p-chat app).
+- Changed: App label to "Random P2P Chat" for clear differentiation.
+- Changed: HTML title and header to "Random P2P Chat".
+- Changed: Unique keystore (random-p2p-chat.keystore, alias randomp2pchat).
+- Changed: GitHub secrets use RANDOM_ prefix for independent builds.
+- Incremented version to 1.0.13 (v13).
+
 Update 1.0.12
 - Added: Voice note recording (hold mic button to record, release to send via WebRTC data channel).
 - Added: Voice call (full duplex audio call between paired users using WebRTC media).

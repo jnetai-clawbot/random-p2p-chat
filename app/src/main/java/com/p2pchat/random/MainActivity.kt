@@ -1,4 +1,4 @@
-package com.p2pchat.app
+package com.p2pchat.random
 
 import android.content.Intent
 import android.net.Uri
@@ -59,8 +59,8 @@ class MainActivity : AppCompatActivity() {
         ErrorLogger.init(this)
         FileHandler.init(this)
         ErrorLogger.i("MainActivity", "onCreate started", mapOf(
-            "versionCode" to "12",
-            "versionName" to "1.0.12"
+            "versionCode" to "13",
+            "versionName" to "1.0.13"
         ))
 
         webView = WebView(this).apply {

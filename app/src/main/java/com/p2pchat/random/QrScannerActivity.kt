@@ -1,4 +1,4 @@
-package com.p2pchat.app
+package com.p2pchat.random
 
 import android.Manifest
 import android.content.pm.PackageManager

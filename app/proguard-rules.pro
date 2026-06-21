@@ -2,6 +2,6 @@
 -keepattributes *Annotation*
 -keepattributes EnclosingMethod
 -keepattributes InnerClasses
--keep class com.p2pchat.app.** { *; }
+-keep class com.p2pchat.random.** { *; }
 -dontwarn javax.annotation.**
 -keep class com.google.mlkit.** { *; }

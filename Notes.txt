@@ -1,0 +1,16 @@
+
+Random P2P Chat & File Transfer
+
+Voice Notes: Hold the mic button (🎤) to record, release to send. Recording indicator shows timer with pulse animation. Received voice notes get a ▶ Play button.
+Voice Calls: Tap "Voice Call" to start a full duplex audio call. Controls: mute mic, toggle speaker, hang up.
+
+
+Video Calls: Tap "Video Call" for audio+video with front camera. Local video shown as picture-in-picture. Controls: mute mic, toggle camera, toggle speaker, hang up.
+Incoming calls auto-answer with the appropriate media stream.
+
+
+APK at apk/p2p-random-chat.apk (v1.0.12, versionCode=12).
+GitHub release: https://github.com/jnetai-clawbot/random-p2p-chat/releases
+
+
+

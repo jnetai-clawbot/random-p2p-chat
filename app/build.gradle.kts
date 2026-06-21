@@ -4,26 +4,26 @@ plugins {
 }
 
 android {
-    namespace = "com.p2pchat.app"
+    namespace = "com.p2pchat.random"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.p2pchat.app"
+        applicationId = "com.p2pchat.random"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.0.12"
+        versionCode = 13
+        versionName = "1.0.13"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            val keystorePath = rootProject.file("p2pchat.keystore")
+            val keystorePath = rootProject.file("random-p2p-chat.keystore")
             if (keystorePath.exists()) {
                 storeFile = keystorePath
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "4daptBXz0Hp6z8kxcsDhvQVx"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "ciphervault"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "4daptBXz0Hp6z8kxcsDhvQVx"
+                storePassword = System.getenv("RANDOM_KEYSTORE_PASSWORD") ?: "R4nd0mP2PChatK3y2024!"
+                keyAlias = System.getenv("RANDOM_KEY_ALIAS") ?: "randomp2pchat"
+                keyPassword = System.getenv("RANDOM_KEY_PASSWORD") ?: "R4nd0mP2PChatK3y2024!"
             }
         }
     }

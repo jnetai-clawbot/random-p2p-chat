@@ -1,4 +1,4 @@
-package com.p2pchat.app
+package com.p2pchat.random
 
 import android.content.Context
 import android.os.Environment

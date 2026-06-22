@@ -520,6 +520,7 @@
 
     function endCurrentChat() {
         if (!remotePeerId) return;
+        if (!confirm('Are you sure you want to end this chat?')) return;
         if (isInCall) endCall();
         if (conn) { isUserEndingChat = true; conn.close(); }
         hideChat(); conn = null; remotePeerId = null;

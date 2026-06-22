@@ -1,4 +1,8 @@
 Project implementation started
+Update 1.0.27
+- Added: Confirmation dialog when pressing End Chat button.
+- Incremented version to 1.0.27 (v27).
+
 Update 1.0.26
 - Rebuilt on v1.0.17 base (working lobby, calls, ID generation).
 - Added: Accept/Decline incoming call dialog with caller ID.

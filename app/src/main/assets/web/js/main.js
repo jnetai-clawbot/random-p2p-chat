@@ -42,6 +42,7 @@
     let voiceNoteSeconds = 0;
     let audioPermissionGranted = false;
     let cameraPermissionGranted = false;
+    let peerInitTimeout = null;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -121,7 +122,8 @@
         udp: document.getElementById('setting-udp'),
         proxyUrl: document.getElementById('setting-proxy-url'),
         reuseId: document.getElementById('setting-reuse-id'),
-        autoAnswer: document.getElementById('setting-auto-answer')
+        autoAnswer: document.getElementById('setting-auto-answer'),
+        autoStartBoot: document.getElementById('setting-auto-start-boot')
     };
 
     const GITHUB_REPO_URL = 'https://github.com/jnetai-clawbot/random-p2p-chat/releases';
@@ -144,7 +146,8 @@
         udp: true,
         proxyUrl: '',
         reuseId: false,
-        autoAnswer: false
+        autoAnswer: false,
+        autoStartBoot: false
     };
 
     function loadSettings() {
@@ -165,6 +168,7 @@
                 if (saved.proxyUrl !== undefined) settings.proxyUrl.value = saved.proxyUrl;
                 if (saved.reuseId !== undefined) settings.reuseId.checked = saved.reuseId;
                 if (saved.autoAnswer !== undefined) settings.autoAnswer.checked = saved.autoAnswer;
+                if (saved.autoStartBoot !== undefined) settings.autoStartBoot.checked = saved.autoStartBoot;
             }
         } catch (e) { /* ignore */ }
     }
@@ -185,7 +189,8 @@
                 udp: settings.udp.checked,
                 proxyUrl: settings.proxyUrl.value,
                 reuseId: settings.reuseId.checked,
-                autoAnswer: settings.autoAnswer.checked
+                autoAnswer: settings.autoAnswer.checked,
+                autoStartBoot: settings.autoStartBoot.checked
             }));
         } catch (e) { /* ignore */ }
     }
@@ -306,6 +311,7 @@
 
     function initPeer() {
         if (peer) peer.destroy();
+        clearTimeout(peerInitTimeout);
         let idToUse;
         if (settings.reuseId.checked) {
             const lastId = localStorage.getItem(LAST_ID_KEY);
@@ -319,6 +325,7 @@
             debug: 1
         });
         peer.on('open', (id) => {
+            clearTimeout(peerInitTimeout);
             localId = id;
             localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
@@ -343,6 +350,12 @@
             log(`Peer error: ${err.type}`, true);
             if (err.type === 'unavailable-id') initPeer();
         });
+        peerInitTimeout = setTimeout(() => {
+            if (!localId) {
+                log('Peer init timeout, retrying...', true);
+                initPeer();
+            }
+        }, 3000);
     }
 
     function generateQrCode(text) {
@@ -1165,6 +1178,12 @@
     settings.proxyUrl.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.reuseId.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.autoAnswer.addEventListener('change', () => { saveSettings(); });
+    settings.autoStartBoot.addEventListener('change', () => {
+        saveSettings();
+        if (window.AndroidBridge) {
+            window.AndroidBridge.setAutoStartBoot(settings.autoStartBoot.checked);
+        }
+    });
 
     elements.resetSettingsBtn.addEventListener('click', () => {
         resetAllSettings();

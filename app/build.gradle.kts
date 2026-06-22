@@ -11,8 +11,8 @@ android {
         applicationId = "com.p2pchat.random"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.0.19"
+        versionCode = 20
+        versionName = "1.0.20"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -74,4 +74,5 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
     implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.preference:preference-ktx:1.2.1")
 }

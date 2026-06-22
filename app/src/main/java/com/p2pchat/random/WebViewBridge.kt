@@ -146,6 +146,17 @@ class WebViewBridge(
         activity.requestCameraPermission()
     }
 
+    @JavascriptInterface
+    fun setAutoStartBoot(enabled: Boolean) {
+        try {
+            val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(activity)
+            prefs.edit().putBoolean("auto_start_boot", enabled).apply()
+            ErrorLogger.i("WebViewBridge", "Auto start boot set to: $enabled")
+        } catch (e: Exception) {
+            ErrorLogger.e("WebViewBridge", "WB008", "Failed to set auto start boot", e)
+        }
+    }
+
     fun onQrScanResult(result: String) {
         webView.post {
             webView.evaluateJavascript("window.onQrScanResult('${escapeJs(result)}')", null)

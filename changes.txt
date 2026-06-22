@@ -1,4 +1,12 @@
 Project implementation started
+Update 1.0.20
+- Fixed: Peer ID generation with 3-second timeout retry if stuck on "Generating...".
+- Added: "Auto Start on Boot" setting toggle (off by default) with BootReceiver.
+- Added: RECEIVE_BOOT_COMPLETED permission for auto-start on device boot.
+- Added: setAutoStartBoot() bridge method for persistent boot preference.
+- Added: androidx.preference dependency for SharedPreferences.
+- Incremented version to 1.0.20 (v20).
+
 Update 1.0.19
 - Added: Auto-generate new ID on every app start (unique by default).
 - Added: "Reuse Last ID" setting toggle (off by default) to keep same ID across restarts.

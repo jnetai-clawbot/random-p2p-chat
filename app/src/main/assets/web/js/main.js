@@ -90,6 +90,7 @@
         callStatusText: document.getElementById('call-status-text'),
         voiceNoteIndicator: document.getElementById('voice-note-indicator'),
         voiceNoteTimer: document.getElementById('voice-note-timer'),
+        shareQrBtn: document.getElementById('share-qr-btn'),
         blockedModal: document.getElementById('blocked-modal'),
         blockedList: document.getElementById('blocked-list'),
         closeBlockedBtn: document.getElementById('close-blocked-btn'),
@@ -352,8 +353,12 @@
         });
         peerInitTimeout = setTimeout(() => {
             if (!localId) {
-                log('Peer init timeout, retrying...', true);
-                initPeer();
+                log('Peer init timeout, using fallback ID', true);
+                localId = idToUse;
+                localStorage.setItem(LAST_ID_KEY, idToUse);
+                elements.localId.textContent = idToUse;
+                updateStatus('Disconnected', 'status-disconnected');
+                generateQrCode(idToUse);
             }
         }, 3000);
     }
@@ -365,6 +370,34 @@
             colorDark: "#000000", colorLight: "#ffffff",
             correctLevel: QRCode.CorrectLevel.H
         });
+        setTimeout(() => {
+            const img = elements.qrContainer.querySelector('img');
+            if (img) {
+                img.style.cursor = 'pointer';
+                img.title = 'Tap to share QR code';
+                img.onclick = shareQrCode;
+            }
+            elements.shareQrBtn.classList.remove('hidden');
+        }, 500);
+    }
+
+    function shareQrCode() {
+        const img = elements.qrContainer.querySelector('img');
+        if (!img) return;
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(blob => {
+            if (!blob) return;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'p2p-random-chat-qr.png';
+            a.click();
+            URL.revokeObjectURL(url);
+        }, 'image/png');
     }
 
     function setupConnection(connection) {
@@ -1193,6 +1226,7 @@
     elements.openSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
     elements.closeSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
     elements.newIdBtn.addEventListener('click', initPeer);
+    elements.shareQrBtn.addEventListener('click', shareQrCode);
     elements.scanQrBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.scanQrCode());
     elements.copyIdBtn.addEventListener('click', () => {
         if (localId) {

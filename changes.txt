@@ -1,4 +1,11 @@
 Project implementation started
+Update 1.0.21
+- Fixed: Peer ID timeout now uses fallback ID + QR code instead of retrying.
+- Added: "Share QR Code" button to download QR as PNG image.
+- Added: Tap QR code image to download/share it.
+- Added: QR code and ID auto-generate on app start (no button press needed).
+- Incremented version to 1.0.21 (v21).
+
 Update 1.0.20
 - Fixed: Peer ID generation with 3-second timeout retry if stuck on "Generating...".
 - Added: "Auto Start on Boot" setting toggle (off by default) with BootReceiver.

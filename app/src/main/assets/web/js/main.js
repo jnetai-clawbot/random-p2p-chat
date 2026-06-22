@@ -42,7 +42,6 @@
     let voiceNoteSeconds = 0;
     let audioPermissionGranted = false;
     let cameraPermissionGranted = false;
-    let peerInitTimeout = null;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -90,7 +89,6 @@
         callStatusText: document.getElementById('call-status-text'),
         voiceNoteIndicator: document.getElementById('voice-note-indicator'),
         voiceNoteTimer: document.getElementById('voice-note-timer'),
-        shareQrBtn: document.getElementById('share-qr-btn'),
         blockedModal: document.getElementById('blocked-modal'),
         blockedList: document.getElementById('blocked-list'),
         closeBlockedBtn: document.getElementById('close-blocked-btn'),
@@ -106,7 +104,8 @@
         incomingCallTitle: document.getElementById('incoming-call-title'),
         incomingCallPeer: document.getElementById('incoming-call-peer'),
         acceptCallBtn: document.getElementById('accept-call-btn'),
-        declineCallBtn: document.getElementById('decline-call-btn')
+        declineCallBtn: document.getElementById('decline-call-btn'),
+        shareQrBtn: document.getElementById('share-qr-btn')
     };
 
     const settings = {
@@ -134,21 +133,9 @@
     const LAST_ID_KEY = 'p2pchat_last_id';
 
     const DEFAULT_SETTINGS = {
-        autoReconnect: true,
-        screenOn: true,
-        allowFiles: true,
-        vibrate: true,
-        useTurn: true,
-        debug: true,
-        saveFolder: '',
-        ipv4: true,
-        ipv6: true,
-        tcp: true,
-        udp: true,
-        proxyUrl: '',
-        reuseId: false,
-        autoAnswer: false,
-        autoStartBoot: false
+        autoReconnect: true, screenOn: true, allowFiles: true, vibrate: true,
+        useTurn: true, debug: true, saveFolder: '', ipv4: true, ipv6: true,
+        tcp: true, udp: true, proxyUrl: '', reuseId: false, autoAnswer: true, autoStartBoot: false
     };
 
     function loadSettings() {
@@ -171,7 +158,7 @@
                 if (saved.autoAnswer !== undefined) settings.autoAnswer.checked = saved.autoAnswer;
                 if (saved.autoStartBoot !== undefined) settings.autoStartBoot.checked = saved.autoStartBoot;
             }
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
     }
 
     function saveSettings() {
@@ -184,16 +171,14 @@
                 useTurn: settings.useTurn.checked,
                 debug: settings.debug.checked,
                 saveFolder: settings.saveFolder.value,
-                ipv4: settings.ipv4.checked,
-                ipv6: settings.ipv6.checked,
-                tcp: settings.tcp.checked,
-                udp: settings.udp.checked,
+                ipv4: settings.ipv4.checked, ipv6: settings.ipv6.checked,
+                tcp: settings.tcp.checked, udp: settings.udp.checked,
                 proxyUrl: settings.proxyUrl.value,
                 reuseId: settings.reuseId.checked,
                 autoAnswer: settings.autoAnswer.checked,
                 autoStartBoot: settings.autoStartBoot.checked
             }));
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
     }
 
     function resetAllSettings() {
@@ -201,8 +186,7 @@
         localStorage.removeItem(BLOCKED_KEY);
         localStorage.removeItem(KNOWN_KEY);
         localStorage.removeItem(LAST_ID_KEY);
-        blockedPeers.clear();
-        knownPeers.clear();
+        blockedPeers.clear(); knownPeers.clear();
         settings.autoReconnect.checked = DEFAULT_SETTINGS.autoReconnect;
         settings.screenOn.checked = DEFAULT_SETTINGS.screenOn;
         settings.allowFiles.checked = DEFAULT_SETTINGS.allowFiles;
@@ -217,39 +201,22 @@
         settings.proxyUrl.value = DEFAULT_SETTINGS.proxyUrl;
         settings.reuseId.checked = DEFAULT_SETTINGS.reuseId;
         settings.autoAnswer.checked = DEFAULT_SETTINGS.autoAnswer;
-        applyScreenSetting();
-        initPeer();
+        settings.autoStartBoot.checked = DEFAULT_SETTINGS.autoStartBoot;
+        applyScreenSetting(); initPeer();
         log('All settings reset to defaults');
     }
 
     function loadBlockedPeers() {
-        try {
-            const saved = JSON.parse(localStorage.getItem(BLOCKED_KEY));
-            if (saved && Array.isArray(saved)) {
-                blockedPeers = new Set(saved);
-            }
-        } catch (e) { /* ignore */ }
+        try { const s = JSON.parse(localStorage.getItem(BLOCKED_KEY)); if (s && Array.isArray(s)) blockedPeers = new Set(s); } catch (e) {}
     }
-
     function saveBlockedPeers() {
-        try {
-            localStorage.setItem(BLOCKED_KEY, JSON.stringify([...blockedPeers]));
-        } catch (e) { /* ignore */ }
+        try { localStorage.setItem(BLOCKED_KEY, JSON.stringify([...blockedPeers])); } catch (e) {}
     }
-
     function loadKnownPeers() {
-        try {
-            const saved = JSON.parse(localStorage.getItem(KNOWN_KEY));
-            if (saved && typeof saved === 'object') {
-                knownPeers = new Map(Object.entries(saved));
-            }
-        } catch (e) { /* ignore */ }
+        try { const s = JSON.parse(localStorage.getItem(KNOWN_KEY)); if (s && typeof s === 'object') knownPeers = new Map(Object.entries(s)); } catch (e) {}
     }
-
     function saveKnownPeers() {
-        try {
-            localStorage.setItem(KNOWN_KEY, JSON.stringify(Object.fromEntries(knownPeers)));
-        } catch (e) { /* ignore */ }
+        try { localStorage.setItem(KNOWN_KEY, JSON.stringify(Object.fromEntries(knownPeers))); } catch (e) {}
     }
 
     function log(msg, isError = false) {
@@ -262,57 +229,32 @@
         if (window.AndroidBridge) window.AndroidBridge.log(msg);
     }
 
-    function generateRandomId() {
-        return Math.floor(1000 + Math.random() * 999999).toString();
-    }
+    function generateRandomId() { return Math.floor(1000 + Math.random() * 999999).toString(); }
 
     function detectNetwork() {
         elements.webrtcSupport.textContent = (window.RTCPeerConnection) ? "Supported" : "Not Supported";
-        fetch('https://api.ipify.org?format=json')
-            .then(res => res.json())
-            .then(data => { elements.publicIp.textContent = data.ip; })
-            .catch(() => { elements.publicIp.textContent = "Unable to detect"; });
+        fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => { elements.publicIp.textContent = d.ip; }).catch(() => { elements.publicIp.textContent = "Unable to detect"; });
     }
 
     function applyScreenSetting() {
-        if (window.AndroidBridge) {
-            window.AndroidBridge.setKeepScreenOn(settings.screenOn.checked);
-        }
+        if (window.AndroidBridge) window.AndroidBridge.setKeepScreenOn(settings.screenOn.checked);
     }
 
     function buildIceServers() {
         const servers = [];
-        if (settings.ipv4.checked) {
-            servers.push(...STUN_SERVERS);
-        }
+        if (settings.ipv4.checked) servers.push(...STUN_SERVERS);
         if (settings.useTurn.checked) {
             const turns = [...TURN_SERVERS];
-            if (!settings.udp.checked) {
-                for (let i = turns.length - 1; i >= 0; i--) {
-                    if (!turns[i].urls.includes('transport=tcp')) {
-                        turns.splice(i, 1);
-                    }
-                }
-            }
-            if (!settings.tcp.checked) {
-                for (let i = turns.length - 1; i >= 0; i--) {
-                    if (turns[i].urls.includes('transport=tcp')) {
-                        turns.splice(i, 1);
-                    }
-                }
-            }
+            if (!settings.udp.checked) { for (let i = turns.length - 1; i >= 0; i--) { if (!turns[i].urls.includes('transport=tcp')) turns.splice(i, 1); } }
+            if (!settings.tcp.checked) { for (let i = turns.length - 1; i >= 0; i--) { if (turns[i].urls.includes('transport=tcp')) turns.splice(i, 1); } }
             servers.push(...turns);
         }
-        if (settings.proxyUrl.value.trim()) {
-            const proxy = settings.proxyUrl.value.trim();
-            servers.push({ urls: proxy });
-        }
+        if (settings.proxyUrl.value.trim()) servers.push({ urls: settings.proxyUrl.value.trim() });
         return servers;
     }
 
     function initPeer() {
         if (peer) peer.destroy();
-        clearTimeout(peerInitTimeout);
         let idToUse;
         if (settings.reuseId.checked) {
             const lastId = localStorage.getItem(LAST_ID_KEY);
@@ -321,30 +263,22 @@
             idToUse = generateRandomId();
         }
         const iceServers = buildIceServers();
-        peer = new Peer(idToUse, {
-            config: { iceServers: iceServers, iceTransportPolicy: 'all' },
-            debug: 1
-        });
+        peer = new Peer(idToUse, { config: { iceServers: iceServers, iceTransportPolicy: 'all' }, debug: 1 });
         peer.on('open', (id) => {
-            clearTimeout(peerInitTimeout);
             localId = id;
             localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
-            updateStatus('Ready', 'status-disconnected');
+            updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
         });
         peer.on('connection', (connection) => {
-            if (conn) {
-                try { conn.close(); } catch(e) {}
-                conn = null;
-            }
+            if (conn) { connection.close(); return; }
             setupConnection(connection);
         });
         peer.on('call', (call) => {
             log(`Incoming call from ${call.peer}`);
-            if (isInCall) { call.close(); return; }
             if (settings.autoAnswer.checked) {
-                log('Auto-answering call');
+                if (isInCall) endCall();
                 answerIncomingCall(call);
             } else {
                 showIncomingCallDialog(call);
@@ -354,32 +288,14 @@
             log(`Peer error: ${err.type}`, true);
             if (err.type === 'unavailable-id') initPeer();
         });
-        peerInitTimeout = setTimeout(() => {
-            if (!localId) {
-                log('Peer init timeout, using fallback ID', true);
-                localId = idToUse;
-                localStorage.setItem(LAST_ID_KEY, idToUse);
-                elements.localId.textContent = idToUse;
-                updateStatus('Ready (offline mode)', 'status-disconnected');
-                generateQrCode(idToUse);
-            }
-        }, 5000);
     }
 
     function generateQrCode(text) {
         elements.qrContainer.innerHTML = '';
-        qrCode = new QRCode(elements.qrContainer, {
-            text: text, width: 150, height: 150,
-            colorDark: "#000000", colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
+        qrCode = new QRCode(elements.qrContainer, { text: text, width: 150, height: 150, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H });
         setTimeout(() => {
             const img = elements.qrContainer.querySelector('img');
-            if (img) {
-                img.style.cursor = 'pointer';
-                img.title = 'Tap to share QR code';
-                img.onclick = shareQrCode;
-            }
+            if (img) { img.style.cursor = 'pointer'; img.title = 'Tap to save QR'; img.onclick = shareQrCode; }
             elements.shareQrBtn.classList.remove('hidden');
         }, 500);
     }
@@ -388,34 +304,16 @@
         const img = elements.qrContainer.querySelector('img');
         if (!img) return;
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        canvas.width = img.width; canvas.height = img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
         const dataUrl = canvas.toDataURL('image/png');
         const base64 = dataUrl.split(',')[1];
-        if (window.AndroidBridge) {
-            window.AndroidBridge.saveQrImage(base64);
-        } else {
-            canvas.toBlob(blob => {
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'p2p-random-chat-qr.png';
-                a.click();
-                URL.revokeObjectURL(url);
-            }, 'image/png');
-        }
+        if (window.AndroidBridge) { window.AndroidBridge.saveQrImage(base64); }
+        else { canvas.toBlob(b => { if (!b) return; const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'p2p-random-chat-qr.png'; a.click(); URL.revokeObjectURL(u); }, 'image/png'); }
     }
 
-    window.onQrSaved = (path) => {
-        log(`QR saved to ${path}`);
-    };
-
-    window.onQrSavedError = (err) => {
-        log(`QR save error: ${err}`, true);
-    };
+    window.onQrSaved = (path) => { log(`QR saved to ${path}`); };
+    window.onQrSavedError = (err) => { log(`QR save error: ${err}`, true); };
 
     function setupConnection(connection) {
         conn = connection;
@@ -433,11 +331,7 @@
             addMessage('System: Connection closed', 'system');
             if (!isUserEndingChat && settings.autoReconnect.checked && remotePeerId) {
                 setTimeout(() => connectToPeer(remotePeerId), 3000);
-            } else {
-                hideChat();
-                conn = null;
-                remotePeerId = null;
-            }
+            } else { hideChat(); conn = null; remotePeerId = null; }
         });
     }
 
@@ -450,64 +344,31 @@
                 else if (msg.type === 'voice_note') handleReceivedVoiceNote(msg);
             } catch (e) { addMessage(data, 'received'); }
         } else if (typeof data === 'object' && data.type === 'file') {
-            if (!settings.allowFiles.checked) {
-                log(`Rejected file: ${data.name} (File transfers disabled)`);
-                return;
-            }
+            if (!settings.allowFiles.checked) { log(`Rejected file: ${data.name}`); return; }
             const folder = settings.saveFolder.value.trim();
-            if (window.AndroidBridge) {
-                window.AndroidBridge.saveReceivedFile(data.name, data.data, folder);
-            }
+            if (window.AndroidBridge) window.AndroidBridge.saveReceivedFile(data.name, data.data, folder);
             addMessage(`Received: ${data.name}` + (folder ? ` -> Downloads/${folder}` : ''), 'system');
         }
     }
 
     function handleReceivedVoiceNote(msg) {
         const audio = new Audio('data:' + (msg.mimeType || 'audio/webm') + ';base64,' + msg.data);
-        audio.oncanplaythrough = () => {
-            audio.play().catch(e => log(`Voice note play error: ${e.message}`, true));
-        };
+        audio.oncanplaythrough = () => { audio.play().catch(e => log(`Voice note play error: ${e.message}`, true)); };
         const dur = msg.duration ? formatDuration(msg.duration) : '?';
         addMessage(`Voice note (${dur})`, 'received');
         const msgDiv = elements.chatMessages.lastElementChild;
-        if (msgDiv) {
-            const playBtn = document.createElement('button');
-            playBtn.textContent = 'Play';
-            playBtn.className = 'play-voice-btn';
-            playBtn.onclick = () => {
-                audio.currentTime = 0;
-                audio.play().catch(e => log(`Voice note play error: ${e.message}`, true));
-            };
-            msgDiv.appendChild(playBtn);
-        }
+        if (msgDiv) { const b = document.createElement('button'); b.textContent = 'Play'; b.className = 'play-voice-btn'; b.onclick = () => { audio.currentTime = 0; audio.play().catch(e => log(`Voice note play error: ${e.message}`, true)); }; msgDiv.appendChild(b); }
     }
 
     function addMessage(text, type) {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `message message-${type}`;
-        msgDiv.textContent = text;
-        elements.chatMessages.appendChild(msgDiv);
-        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+        const d = document.createElement('div'); d.className = `message message-${type}`; d.textContent = text;
+        elements.chatMessages.appendChild(d); elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     }
 
-    function updateStatus(text, className) {
-        elements.status.textContent = text;
-        elements.status.className = className;
-    }
+    function updateStatus(text, className) { elements.status.textContent = text; elements.status.className = className; }
 
-    function showChat() {
-        elements.chatSection.classList.remove('hidden');
-        elements.idSection.classList.add('hidden');
-        elements.connectSection.classList.add('hidden');
-        elements.randomSection.classList.add('hidden');
-    }
-
-    function hideChat() {
-        elements.chatSection.classList.add('hidden');
-        elements.idSection.classList.remove('hidden');
-        elements.connectSection.classList.remove('hidden');
-        elements.randomSection.classList.remove('hidden');
-    }
+    function showChat() { elements.chatSection.classList.remove('hidden'); elements.idSection.classList.add('hidden'); elements.connectSection.classList.add('hidden'); elements.randomSection.classList.add('hidden'); }
+    function hideChat() { elements.chatSection.classList.add('hidden'); elements.idSection.classList.remove('hidden'); elements.connectSection.classList.remove('hidden'); elements.randomSection.classList.remove('hidden'); }
 
     function connectToPeer(id) {
         if (!id) return;
@@ -522,48 +383,24 @@
         setTimeout(() => document.body.classList.remove('shake'), 500);
     }
 
-    function getLobbyId() {
-        const slot = Math.floor(Date.now() / (LOBBY_SLOT_SECS * 1000));
-        return LOBBY_PREFIX + slot;
-    }
+    function getLobbyId() { const slot = Math.floor(Date.now() / (LOBBY_SLOT_SECS * 1000)); return LOBBY_PREFIX + slot; }
 
     function startRandomSearch() {
-        if (!localId) {
-            log('No local ID yet, wait for peer initialization', true);
-            return;
-        }
+        if (!localId) { log('No local ID yet', true); return; }
         if (isSearching) return;
-        if (conn && conn.open) {
-            log('Already connected to a peer', true);
-            return;
-        }
-        isSearching = true;
-        searchRetryCount = 0;
-        updateSearchUI(true);
-        joinLobby();
+        if (conn && conn.open) { log('Already connected', true); return; }
+        isSearching = true; searchRetryCount = 0; updateSearchUI(true); joinLobby();
     }
 
     function cancelRandomSearch() {
         if (!isSearching) return;
-        isSearching = false;
-        clearTimeout(searchRetryTimer);
-        searchRetryTimer = null;
-        searchRetryCount = 0;
-        updateSearchUI(false);
-        leaveLobby();
+        isSearching = false; clearTimeout(searchRetryTimer); searchRetryTimer = null; searchRetryCount = 0;
+        updateSearchUI(false); leaveLobby();
     }
 
     function updateSearchUI(searching) {
-        if (searching) {
-            elements.searchStatus.classList.remove('hidden');
-            elements.searchStatusText.textContent = 'Searching for a random user...';
-            elements.connectRandomBtn.classList.add('hidden');
-            elements.cancelSearchBtn.classList.remove('hidden');
-        } else {
-            elements.searchStatus.classList.add('hidden');
-            elements.connectRandomBtn.classList.remove('hidden');
-            elements.cancelSearchBtn.classList.add('hidden');
-        }
+        if (searching) { elements.searchStatus.classList.remove('hidden'); elements.searchStatusText.textContent = 'Searching for a random user...'; elements.connectRandomBtn.classList.add('hidden'); elements.cancelSearchBtn.classList.remove('hidden'); }
+        else { elements.searchStatus.classList.add('hidden'); elements.connectRandomBtn.classList.remove('hidden'); elements.cancelSearchBtn.classList.add('hidden'); }
     }
 
     function joinLobby() {
@@ -571,38 +408,18 @@
         const lobbyId = getLobbyId();
         log(`Joining lobby: ${lobbyId}`);
         if (lobbyPeer) { lobbyPeer.destroy(); lobbyPeer = null; }
-        lobbyConn = null;
-        lobbyQueue = [];
+        lobbyConn = null; lobbyQueue = [];
         const iceServers = buildIceServers();
-        lobbyPeer = new Peer(lobbyId, {
-            config: { iceServers: iceServers, iceTransportPolicy: 'all' },
-            debug: 0
-        });
+        lobbyPeer = new Peer(lobbyId, { config: { iceServers: iceServers, iceTransportPolicy: 'all' }, debug: 0 });
         lobbyPeer.on('open', () => {
             log(`Became lobby host: ${lobbyId}`);
             elements.searchStatusText.textContent = 'Hosting lobby, waiting for users...';
-            lobbyQueue.push({
-                conn: null,
-                peerId: localId,
-                persistentId: persistentId,
-                isHost: true
-            });
-            lobbyPeer.on('connection', (conn) => {
-                handleLobbyConnection(conn);
-            });
+            lobbyQueue.push({ conn: null, peerId: localId, persistentId: persistentId, isHost: true });
+            lobbyPeer.on('connection', (conn) => { handleLobbyConnection(conn); });
         });
         lobbyPeer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                log(`Lobby ${lobbyId} already has a host, connecting as client`);
-                lobbyPeer.destroy();
-                lobbyPeer = null;
-                connectToLobbyHost(lobbyId);
-            } else {
-                log(`Lobby error: ${err.type}`, true);
-                lobbyPeer.destroy();
-                lobbyPeer = null;
-                if (isSearching) scheduleLobbyRetry();
-            }
+            if (err.type === 'unavailable-id') { log(`Lobby ${lobbyId} has host, connecting as client`); lobbyPeer.destroy(); lobbyPeer = null; connectToLobbyHost(lobbyId); }
+            else { log(`Lobby error: ${err.type}`, true); lobbyPeer.destroy(); lobbyPeer = null; if (isSearching) scheduleLobbyRetry(); }
         });
     }
 
@@ -614,60 +431,25 @@
                 try {
                     const msg = JSON.parse(data);
                     if (msg.type === 'lobby_join') {
-                        const clientPeerId = msg.peerId;
-                        const clientPersistentId = msg.persistentId;
-                        if (blockedPeers.has(clientPersistentId)) {
-                            conn.send(JSON.stringify({ type: 'lobby_reject', reason: 'blocked' }));
-                            conn.close();
-                            return;
-                        }
-                        lobbyQueue.push({ conn: conn, peerId: clientPeerId, persistentId: clientPersistentId });
-                        log(`Lobby client joined: ${clientPeerId}`);
+                        if (blockedPeers.has(msg.persistentId)) { conn.send(JSON.stringify({ type: 'lobby_reject', reason: 'blocked' })); conn.close(); return; }
+                        lobbyQueue.push({ conn: conn, peerId: msg.peerId, persistentId: msg.persistentId });
+                        log(`Lobby client joined: ${msg.peerId}`);
                         tryPairLobbyClients();
                     }
                 } catch (e) {}
             });
-            conn.on('close', () => {
-                lobbyQueue = lobbyQueue.filter(q => q.conn !== conn);
-            });
+            conn.on('close', () => { lobbyQueue = lobbyQueue.filter(q => q.conn !== conn); });
         });
     }
 
     function tryPairLobbyClients() {
         while (lobbyQueue.length >= 2) {
-            const a = lobbyQueue.shift();
-            const b = lobbyQueue.shift();
-            if (skippedPeers.has(b.persistentId) && !skippedPeers.has(a.persistentId)) {
-                lobbyQueue.unshift(b);
-                continue;
-            }
-            if (skippedPeers.has(a.persistentId) && !skippedPeers.has(b.persistentId)) {
-                lobbyQueue.unshift(a);
-                continue;
-            }
-            if (a.isHost) {
-                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
-                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
-                isSearching = false;
-                updateSearchUI(false);
-                leaveLobby();
-                connectToPeer(b.peerId);
-                log(`Host paired with client: ${a.peerId} <-> ${b.peerId}`);
-            } else if (b.isHost) {
-                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
-                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
-                isSearching = false;
-                updateSearchUI(false);
-                leaveLobby();
-                connectToPeer(a.peerId);
-                log(`Host paired with client: ${b.peerId} <-> ${a.peerId}`);
-            } else {
-                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
-                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
-                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
-                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
-                log(`Paired: ${a.peerId} <-> ${b.peerId}`);
-            }
+            const a = lobbyQueue.shift(), b = lobbyQueue.shift();
+            if (skippedPeers.has(b.persistentId) && !skippedPeers.has(a.persistentId)) { lobbyQueue.unshift(b); continue; }
+            if (skippedPeers.has(a.persistentId) && !skippedPeers.has(b.persistentId)) { lobbyQueue.unshift(a); continue; }
+            if (a.isHost) { b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId })); setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(b.peerId); log(`Host paired: ${a.peerId} <-> ${b.peerId}`); }
+            else if (b.isHost) { a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId })); setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(a.peerId); log(`Host paired: ${b.peerId} <-> ${a.peerId}`); }
+            else { a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId })); b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId })); setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500); setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500); log(`Paired: ${a.peerId} <-> ${b.peerId}`); }
         }
     }
 
@@ -677,44 +459,21 @@
         const conn = peer.connect(lobbyId, { reliable: true });
         conn.on('open', () => {
             lobbyConn = conn;
-            conn.send(JSON.stringify({
-                type: 'lobby_join',
-                peerId: localId,
-                persistentId: persistentId
-            }));
+            conn.send(JSON.stringify({ type: 'lobby_join', peerId: localId, persistentId: persistentId }));
             elements.searchStatusText.textContent = 'Waiting in lobby for a match...';
         });
         conn.on('data', (data) => {
             try {
                 const msg = JSON.parse(data);
-                if (msg.type === 'lobby_paired') {
-                    log(`Lobby matched with: ${msg.peerId}`);
-                    isSearching = false;
-                    updateSearchUI(false);
-                    leaveLobby();
-                    connectToPeer(msg.peerId);
-                } else if (msg.type === 'lobby_reject') {
-                    log(`Lobby rejected: ${msg.reason}`, true);
-                    leaveLobby();
-                    if (isSearching) scheduleLobbyRetry();
-                }
+                if (msg.type === 'lobby_paired') { log(`Lobby matched: ${msg.peerId}`); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(msg.peerId); }
+                else if (msg.type === 'lobby_reject') { log(`Lobby rejected: ${msg.reason}`, true); leaveLobby(); if (isSearching) scheduleLobbyRetry(); }
             } catch (e) {}
         });
-        conn.on('close', () => {
-            lobbyConn = null;
-            if (isSearching) scheduleLobbyRetry();
-        });
-        conn.on('error', () => {
-            lobbyConn = null;
-            if (isSearching) scheduleLobbyRetry();
-        });
+        conn.on('close', () => { lobbyConn = null; if (isSearching) scheduleLobbyRetry(); });
+        conn.on('error', () => { lobbyConn = null; if (isSearching) scheduleLobbyRetry(); });
     }
 
-    function leaveLobby() {
-        if (lobbyConn) { try { lobbyConn.close(); } catch(e) {} lobbyConn = null; }
-        if (lobbyPeer) { try { lobbyPeer.destroy(); } catch(e) {} lobbyPeer = null; }
-        lobbyQueue = [];
-    }
+    function leaveLobby() { if (lobbyConn) { try { lobbyConn.close(); } catch(e) {} lobbyConn = null; } if (lobbyPeer) { try { lobbyPeer.destroy(); } catch(e) {} lobbyPeer = null; } lobbyQueue = []; }
 
     function scheduleLobbyRetry() {
         if (!isSearching) return;
@@ -723,25 +482,17 @@
         elements.searchStatusText.textContent = `Searching... (retry ${searchRetryCount})`;
         log(`Lobby retry in ${delay/1000}s (attempt ${searchRetryCount})`);
         clearTimeout(searchRetryTimer);
-        searchRetryTimer = setTimeout(() => {
-            if (isSearching) joinLobby();
-        }, delay);
+        searchRetryTimer = setTimeout(() => { if (isSearching) joinLobby(); }, delay);
     }
 
     function blockCurrentPeer() {
         if (!remotePeerId) return;
         if (isInCall) endCall();
         if (persistentId) blockedPeers.add(persistentId);
-        blockedPeers.add(remotePeerId);
-        saveBlockedPeers();
-        if (conn) {
-            isUserEndingChat = true;
-            conn.close();
-        }
+        blockedPeers.add(remotePeerId); saveBlockedPeers();
+        if (conn) { isUserEndingChat = true; conn.close(); }
         addMessage(`System: Blocked ${remotePeerId}`, 'system');
-        hideChat();
-        conn = null;
-        remotePeerId = null;
+        hideChat(); conn = null; remotePeerId = null;
         startRandomSearch();
     }
 
@@ -749,403 +500,34 @@
         if (!remotePeerId) return;
         if (isInCall) endCall();
         skippedPeers.add(remotePeerId);
-        if (conn) {
-            isUserEndingChat = true;
-            conn.close();
-        }
+        if (conn) { isUserEndingChat = true; conn.close(); }
         addMessage(`System: Skipped ${remotePeerId}`, 'system');
-        hideChat();
-        conn = null;
-        remotePeerId = null;
+        hideChat(); conn = null; remotePeerId = null;
         startRandomSearch();
     }
 
     function endCurrentChat() {
         if (!remotePeerId) return;
         if (isInCall) endCall();
-        if (conn) {
-            isUserEndingChat = true;
-            conn.close();
-        }
-        hideChat();
-        conn = null;
-        remotePeerId = null;
+        if (conn) { isUserEndingChat = true; conn.close(); }
+        hideChat(); conn = null; remotePeerId = null;
     }
 
-    function addKnownPeer(peerId) {
-        if (!peerId) return;
-        knownPeers.set(peerId, new Date().toISOString());
-        saveKnownPeers();
-    }
+    function addKnownPeer(peerId) { if (!peerId) return; knownPeers.set(peerId, new Date().toISOString()); saveKnownPeers(); }
 
     function showBlockedModal() {
         elements.blockedList.innerHTML = '';
-        if (blockedPeers.size === 0) {
-            elements.blockedList.innerHTML = '<p class="empty-list">No blocked users</p>';
-        } else {
-            for (const id of blockedPeers) {
-                const item = document.createElement('div');
-                item.className = 'list-item';
-                item.innerHTML = `<span class="list-item-id">${id}</span>`;
-                const unblockBtn = document.createElement('button');
-                unblockBtn.className = 'small-btn secondary-btn';
-                unblockBtn.textContent = 'Unblock';
-                unblockBtn.onclick = () => {
-                    blockedPeers.delete(id);
-                    saveBlockedPeers();
-                    showBlockedModal();
-                };
-                item.appendChild(unblockBtn);
-                elements.blockedList.appendChild(item);
-            }
-        }
-        elements.blockedModal.classList.remove('hidden');
-    }
-
-    function showBlockedModal() {
-        elements.blockedList.innerHTML = '';
-        if (blockedPeers.size === 0) {
-            elements.blockedList.innerHTML = '<p class="empty-list">No blocked users</p>';
-        } else {
-            for (const id of blockedPeers) {
-                const item = document.createElement('div');
-                item.className = 'list-item';
-                item.innerHTML = `<span class="list-item-id">${id}</span>`;
-                const unblockBtn = document.createElement('button');
-                unblockBtn.className = 'small-btn secondary-btn';
-                unblockBtn.textContent = 'Unblock';
-                unblockBtn.onclick = () => {
-                    blockedPeers.delete(id);
-                    saveBlockedPeers();
-                    showBlockedModal();
-                };
-                item.appendChild(unblockBtn);
-                elements.blockedList.appendChild(item);
-            }
-        }
+        if (blockedPeers.size === 0) { elements.blockedList.innerHTML = '<p class="empty-list">No blocked users</p>'; }
+        else { for (const id of blockedPeers) { const item = document.createElement('div'); item.className = 'list-item'; item.innerHTML = `<span class="list-item-id">${id}</span>`; const b = document.createElement('button'); b.className = 'small-btn secondary-btn'; b.textContent = 'Unblock'; b.onclick = () => { blockedPeers.delete(id); saveBlockedPeers(); showBlockedModal(); }; item.appendChild(b); elements.blockedList.appendChild(item); } }
         elements.blockedModal.classList.remove('hidden');
     }
 
     function showKnownModal() {
         elements.knownList.innerHTML = '';
-        if (knownPeers.size === 0) {
-            elements.knownList.innerHTML = '<p class="empty-list">No known users yet</p>';
-        } else {
-            const entries = [...knownPeers.entries()].sort((a, b) => b[1].localeCompare(a[1]));
-            for (const [id, time] of entries) {
-                const item = document.createElement('div');
-                item.className = 'list-item';
-                const date = new Date(time).toLocaleDateString();
-                item.innerHTML = `<span class="list-item-id">${id}</span><span class="list-item-time">${date}</span>`;
-                const connectBtn = document.createElement('button');
-                connectBtn.className = 'small-btn primary-btn';
-                connectBtn.textContent = 'Connect';
-                connectBtn.onclick = () => {
-                    elements.knownModal.classList.add('hidden');
-                    connectToPeer(id);
-                };
-                item.appendChild(connectBtn);
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'small-btn danger-btn';
-                removeBtn.textContent = 'Remove';
-                removeBtn.onclick = () => {
-                    knownPeers.delete(id);
-                    saveKnownPeers();
-                    showKnownModal();
-                };
-                item.appendChild(removeBtn);
-                elements.knownList.appendChild(item);
-            }
-        }
+        if (knownPeers.size === 0) { elements.knownList.innerHTML = '<p class="empty-list">No known users yet</p>'; }
+        else { const entries = [...knownPeers.entries()].sort((a, b) => b[1].localeCompare(a[1])); for (const [id, time] of entries) { const item = document.createElement('div'); item.className = 'list-item'; const date = new Date(time).toLocaleDateString(); item.innerHTML = `<span class="list-item-id">${id}</span><span class="list-item-time">${date}</span>`; const cb = document.createElement('button'); cb.className = 'small-btn primary-btn'; cb.textContent = 'Connect'; cb.onclick = () => { elements.knownModal.classList.add('hidden'); connectToPeer(id); }; item.appendChild(cb); const rb = document.createElement('button'); rb.className = 'small-btn danger-btn'; rb.textContent = 'Remove'; rb.onclick = () => { knownPeers.delete(id); saveKnownPeers(); showKnownModal(); }; item.appendChild(rb); elements.knownList.appendChild(item); } }
         elements.knownModal.classList.remove('hidden');
     }
-
-    function startVoiceNote() {
-        if (!conn || !conn.open) return;
-        if (voiceNoteRecorder && voiceNoteRecorder.state === 'recording') return;
-        requestAudioPermission(() => {
-            doStartVoiceNote();
-        });
-    }
-
-    function doStartVoiceNote() {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            voiceNoteChunks = [];
-            voiceNoteSeconds = 0;
-            try {
-                voiceNoteRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-            } catch (e) {
-                voiceNoteRecorder = new MediaRecorder(stream);
-            }
-            voiceNoteRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) voiceNoteChunks.push(e.data);
-            };
-            voiceNoteRecorder.onstop = () => {
-                stream.getTracks().forEach(t => t.stop());
-                const blob = new Blob(voiceNoteChunks, { type: voiceNoteRecorder.mimeType || 'audio/webm' });
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64 = reader.result.split(',')[1];
-                    if (conn && conn.open) {
-                        conn.send(JSON.stringify({ type: 'voice_note', data: base64, mimeType: blob.type, duration: voiceNoteSeconds }));
-                        addMessage(`Voice note (${formatDuration(voiceNoteSeconds)})`, 'sent');
-                    }
-                };
-                reader.readAsDataURL(blob);
-            };
-            voiceNoteRecorder.start(100);
-            elements.voiceNoteIndicator.classList.remove('hidden');
-            updateVoiceNoteTimer();
-            voiceNoteTimer = setInterval(updateVoiceNoteTimer, 1000);
-            log('Voice note recording started');
-        }).catch(err => {
-            log(`Voice note error: ${err.message}`, true);
-        });
-    }
-
-    function stopVoiceNote() {
-        if (!voiceNoteRecorder || voiceNoteRecorder.state !== 'recording') return;
-        voiceNoteRecorder.stop();
-        voiceNoteRecorder = null;
-        clearInterval(voiceNoteTimer);
-        voiceNoteTimer = null;
-        elements.voiceNoteIndicator.classList.add('hidden');
-        log('Voice note recording stopped');
-    }
-
-    function updateVoiceNoteTimer() {
-        voiceNoteSeconds++;
-        elements.voiceNoteTimer.textContent = formatDuration(voiceNoteSeconds);
-    }
-
-    function formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-    }
-
-    function startCall(withVideo) {
-        if (!conn || !conn.open) {
-            log('Cannot start call: not connected to a peer', true);
-            return;
-        }
-        if (isInCall) {
-            log('Ending current call to start new one');
-            endCall();
-        }
-        isInCall = true;
-        isCallInitiator = true;
-        const needsCamera = withVideo;
-        if (audioPermissionGranted) {
-            if (needsCamera && !cameraPermissionGranted) {
-                requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; });
-            } else {
-                doStartCall(withVideo);
-            }
-        } else {
-            requestAudioPermission(() => {
-                if (needsCamera && !cameraPermissionGranted) {
-                    requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; });
-                } else {
-                    doStartCall(withVideo);
-                }
-            }, () => { isInCall = false; isCallInitiator = false; });
-        }
-    }
-
-    function doStartCall(withVideo) {
-        const constraints = withVideo
-            ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
-            : { audio: true, video: false };
-        log(`Starting ${withVideo?'video':'voice'} call to ${remotePeerId}`);
-        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-            localStream = stream;
-            elements.localVideo.srcObject = stream;
-            if (!withVideo) elements.localVideo.classList.add('hidden');
-            else elements.localVideo.classList.remove('hidden');
-            elements.callOverlay.classList.remove('hidden');
-            elements.callStatusText.textContent = 'Calling...';
-            elements.toggleCamBtn.classList.toggle('hidden', !withVideo);
-            const callOpts = withVideo ? { metadata: { video: true } } : {};
-            mediaCall = peer.call(remotePeerId, stream, callOpts);
-            log(`Call initiated, waiting for answer`);
-            setupMediaCall(mediaCall);
-        }).catch(err => {
-            log(`Call media error: ${err.message}`, true);
-            isInCall = false;
-            isCallInitiator = false;
-        });
-    }
-
-    function setupMediaCall(call) {
-        call.on('stream', (remoteStream) => {
-            log('Remote stream received');
-            elements.remoteVideo.srcObject = remoteStream;
-            elements.callStatusText.textContent = 'Connected';
-        });
-        call.on('close', () => {
-            log('Call closed by remote');
-            endCall();
-        });
-        call.on('error', (err) => {
-            log(`Call error: ${err.message || err}`, true);
-            endCall();
-        });
-    }
-
-    function answerIncomingCall(call) {
-        log(`Incoming call from ${call.peer}, metadata: ${JSON.stringify(call.metadata)}`);
-        if (isInCall) {
-            log('Ending current call to answer incoming');
-            endCall();
-        }
-        isInCall = true;
-        isCallInitiator = false;
-        const isVideo = call.metadata && call.metadata.video;
-        const constraints = isVideo
-            ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }
-            : { audio: true, video: false };
-        if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) {
-            doAnswerCall(call, constraints, isVideo);
-        } else if (!audioPermissionGranted) {
-            requestAudioPermission(() => {
-                if (isVideo && !cameraPermissionGranted) {
-                    requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; });
-                } else {
-                    doAnswerCall(call, constraints, isVideo);
-                }
-            }, () => { call.close(); isInCall = false; });
-        } else if (isVideo && !cameraPermissionGranted) {
-            requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; });
-        }
-    }
-
-    function doAnswerCall(call, constraints, isVideo) {
-        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
-            localStream = stream;
-            elements.localVideo.srcObject = stream;
-            if (!isVideo) elements.localVideo.classList.add('hidden');
-            else elements.localVideo.classList.remove('hidden');
-            elements.callOverlay.classList.remove('hidden');
-            elements.callStatusText.textContent = 'Connected';
-            elements.toggleCamBtn.classList.toggle('hidden', !isVideo);
-            call.answer(stream);
-            log(`Answered ${isVideo?'video':'voice'} call`);
-            setupMediaCall(call);
-        }).catch(err => {
-            log(`Answer call media error: ${err.message}`, true);
-            call.close();
-            isInCall = false;
-        });
-    }
-
-    function endCall() {
-        if (localStream) {
-            localStream.getTracks().forEach(t => t.stop());
-            localStream = null;
-        }
-        if (mediaCall) {
-            mediaCall.close();
-            mediaCall = null;
-        }
-        elements.remoteVideo.srcObject = null;
-        elements.localVideo.srcObject = null;
-        elements.callOverlay.classList.add('hidden');
-        isInCall = false;
-        isCallInitiator = false;
-        log('Call ended');
-    }
-
-    function toggleMic() {
-        if (!localStream) return;
-        const audioTrack = localStream.getAudioTracks()[0];
-        if (audioTrack) {
-            audioTrack.enabled = !audioTrack.enabled;
-            elements.toggleMicBtn.classList.toggle('active', audioTrack.enabled);
-            elements.toggleMicBtn.textContent = audioTrack.enabled ? 'Mic' : 'Muted';
-        }
-    }
-
-    function toggleCam() {
-        if (!localStream) return;
-        const videoTrack = localStream.getVideoTracks()[0];
-        if (videoTrack) {
-            videoTrack.enabled = !videoTrack.enabled;
-            elements.toggleCamBtn.classList.toggle('active', videoTrack.enabled);
-            elements.toggleCamBtn.textContent = videoTrack.enabled ? 'Cam' : 'Cam Off';
-        }
-    }
-
-    function toggleSpeaker() {
-        if (!elements.remoteVideo) return;
-        const isSpeaker = elements.remoteVideo.audioOutputType !== 'speaker';
-        if (typeof elements.remoteVideo.setSinkId === 'function') {
-            elements.remoteVideo.setSinkId(isSpeaker ? 'speaker' : '').catch(() => {});
-        }
-        elements.toggleSpeakerBtn.classList.toggle('active', isSpeaker);
-        elements.toggleSpeakerBtn.textContent = isSpeaker ? 'Spkr' : 'Earpc';
-    }
-
-    let pendingAudioCallback = null;
-    let pendingCameraCallback = null;
-    let pendingAudioFailCallback = null;
-    let pendingCameraFailCallback = null;
-
-    function requestAudioPermission(onGranted, onDenied) {
-        if (window.AndroidBridge) {
-            pendingAudioCallback = onGranted;
-            pendingAudioFailCallback = onDenied || (() => {});
-            window.AndroidBridge.requestAudioPermission();
-        } else {
-            onGranted();
-        }
-    }
-
-    function requestCameraPermission(onGranted, onDenied) {
-        if (window.AndroidBridge) {
-            pendingCameraCallback = onGranted;
-            pendingCameraFailCallback = onDenied || (() => {});
-            window.AndroidBridge.requestCameraPermission();
-        } else {
-            onGranted();
-        }
-    }
-
-    window.onAudioPermissionResult = (granted) => {
-        audioPermissionGranted = granted;
-        if (granted) {
-            if (pendingAudioCallback) { pendingAudioCallback(); pendingAudioCallback = null; }
-        } else {
-            log('Audio permission denied', true);
-            if (pendingAudioFailCallback) { pendingAudioFailCallback(); pendingAudioFailCallback = null; }
-        }
-    };
-
-    window.onCameraPermissionResult = (granted) => {
-        cameraPermissionGranted = granted;
-        if (granted) {
-            if (pendingCameraCallback) { pendingCameraCallback(); pendingCameraCallback = null; }
-        } else {
-            log('Camera permission denied', true);
-            if (pendingCameraFailCallback) { pendingCameraFailCallback(); pendingCameraFailCallback = null; }
-        }
-    };
-
-    window.isModalOpen = () => {
-        return (!elements.settingsModal.classList.contains('hidden') ||
-                !elements.blockedModal.classList.contains('hidden') ||
-                !elements.knownModal.classList.contains('hidden')).toString();
-    };
-
-    window.closeTopModal = () => {
-        if (!elements.settingsModal.classList.contains('hidden')) {
-            elements.settingsModal.classList.add('hidden');
-        } else if (!elements.blockedModal.classList.contains('hidden')) {
-            elements.blockedModal.classList.add('hidden');
-        } else if (!elements.knownModal.classList.contains('hidden')) {
-            elements.knownModal.classList.add('hidden');
-        }
-    };
 
     function showIncomingCallDialog(call) {
         pendingIncomingCall = call;
@@ -1158,45 +540,128 @@
     function acceptIncomingCall() {
         if (!pendingIncomingCall) return;
         elements.incomingCallDialog.classList.add('hidden');
-        const call = pendingIncomingCall;
-        pendingIncomingCall = null;
+        const call = pendingIncomingCall; pendingIncomingCall = null;
         answerIncomingCall(call);
     }
 
     function declineIncomingCall() {
-        if (pendingIncomingCall) {
-            pendingIncomingCall.close();
-            pendingIncomingCall = null;
-        }
+        if (pendingIncomingCall) { pendingIncomingCall.close(); pendingIncomingCall = null; }
         elements.incomingCallDialog.classList.add('hidden');
         log('Incoming call declined');
     }
 
-    window.onQrScanResult = (res) => { elements.remoteIdInput.value = res; connectToPeer(res); };
-    window.onFilePicked = (file) => {
-        if (file && conn && conn.open) {
-            conn.send({ type: 'file', name: file.name, size: file.size, data: file.data });
-            addMessage(`Sent: ${file.name}`, 'system');
-        }
-    };
-    window.onFileSaved = (path) => {
-        const folder = settings.saveFolder.value.trim();
-        if (folder) {
-            addMessage(`Saved to Downloads/${folder}`, 'system');
+    function startVoiceNote() {
+        if (!conn || !conn.open) return;
+        if (voiceNoteRecorder && voiceNoteRecorder.state === 'recording') return;
+        requestAudioPermission(() => { doStartVoiceNote(); });
+    }
+
+    function doStartVoiceNote() {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            voiceNoteChunks = []; voiceNoteSeconds = 0;
+            try { voiceNoteRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' }); } catch (e) { voiceNoteRecorder = new MediaRecorder(stream); }
+            voiceNoteRecorder.ondataavailable = (e) => { if (e.data.size > 0) voiceNoteChunks.push(e.data); };
+            voiceNoteRecorder.onstop = () => { stream.getTracks().forEach(t => t.stop()); const blob = new Blob(voiceNoteChunks, { type: voiceNoteRecorder.mimeType || 'audio/webm' }); const reader = new FileReader(); reader.onloadend = () => { const base64 = reader.result.split(',')[1]; if (conn && conn.open) { conn.send(JSON.stringify({ type: 'voice_note', data: base64, mimeType: blob.type, duration: voiceNoteSeconds })); addMessage(`Voice note (${formatDuration(voiceNoteSeconds)})`, 'sent'); } }; reader.readAsDataURL(blob); };
+            voiceNoteRecorder.start(100); elements.voiceNoteIndicator.classList.remove('hidden'); updateVoiceNoteTimer(); voiceNoteTimer = setInterval(updateVoiceNoteTimer, 1000); log('Voice note recording started');
+        }).catch(err => { log(`Voice note error: ${err.message}`, true); });
+    }
+
+    function stopVoiceNote() { if (!voiceNoteRecorder || voiceNoteRecorder.state !== 'recording') return; voiceNoteRecorder.stop(); voiceNoteRecorder = null; clearInterval(voiceNoteTimer); voiceNoteTimer = null; elements.voiceNoteIndicator.classList.add('hidden'); log('Voice note recording stopped'); }
+    function updateVoiceNoteTimer() { voiceNoteSeconds++; elements.voiceNoteTimer.textContent = formatDuration(voiceNoteSeconds); }
+    function formatDuration(seconds) { const m = Math.floor(seconds / 60); const s = seconds % 60; return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); }
+
+    function startCall(withVideo) {
+        if (!conn || !conn.open) { log('Cannot start call: not connected', true); return; }
+        if (isInCall) { log('Ending current call to start new one'); endCall(); }
+        isInCall = true; isCallInitiator = true;
+        const needsCamera = withVideo;
+        if (audioPermissionGranted) {
+            if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
+            else { doStartCall(withVideo); }
         } else {
-            addMessage('Saved to Downloads', 'system');
+            requestAudioPermission(() => {
+                if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
+                else { doStartCall(withVideo); }
+            }, () => { isInCall = false; isCallInitiator = false; });
         }
-    };
+    }
+
+    function doStartCall(withVideo) {
+        const constraints = withVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
+        log(`Starting ${withVideo?'video':'voice'} call to ${remotePeerId}`);
+        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+            localStream = stream; elements.localVideo.srcObject = stream;
+            if (!withVideo) elements.localVideo.classList.add('hidden'); else elements.localVideo.classList.remove('hidden');
+            elements.callOverlay.classList.remove('hidden'); elements.callStatusText.textContent = 'Calling...';
+            elements.toggleCamBtn.classList.toggle('hidden', !withVideo);
+            const callOpts = withVideo ? { metadata: { video: true } } : {};
+            mediaCall = peer.call(remotePeerId, stream, callOpts);
+            log(`Call initiated`); setupMediaCall(mediaCall);
+        }).catch(err => { log(`Call media error: ${err.message}`, true); isInCall = false; isCallInitiator = false; });
+    }
+
+    function setupMediaCall(call) {
+        call.on('stream', (remoteStream) => { log('Remote stream received'); elements.remoteVideo.srcObject = remoteStream; elements.callStatusText.textContent = 'Connected'; });
+        call.on('close', () => { log('Call closed by remote'); endCall(); });
+        call.on('error', (err) => { log(`Call error: ${err.message || err}`, true); endCall(); });
+    }
+
+    function answerIncomingCall(call) {
+        log(`Answering call from ${call.peer}`);
+        if (isInCall) { log('Ending current call to answer incoming'); endCall(); }
+        isInCall = true; isCallInitiator = false;
+        const isVideo = call.metadata && call.metadata.video;
+        const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
+        if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) { doAnswerCall(call, constraints, isVideo); }
+        else if (!audioPermissionGranted) { requestAudioPermission(() => { if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); } else { doAnswerCall(call, constraints, isVideo); } }, () => { call.close(); isInCall = false; }); }
+        else if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); }
+    }
+
+    function doAnswerCall(call, constraints, isVideo) {
+        navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+            localStream = stream; elements.localVideo.srcObject = stream;
+            if (!isVideo) elements.localVideo.classList.add('hidden'); else elements.localVideo.classList.remove('hidden');
+            elements.callOverlay.classList.remove('hidden'); elements.callStatusText.textContent = 'Connected';
+            elements.toggleCamBtn.classList.toggle('hidden', !isVideo);
+            call.answer(stream); log(`Answered ${isVideo?'video':'voice'} call`); setupMediaCall(call);
+        }).catch(err => { log(`Answer call media error: ${err.message}`, true); call.close(); isInCall = false; });
+    }
+
+    function endCall() {
+        if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+        if (mediaCall) { mediaCall.close(); mediaCall = null; }
+        elements.remoteVideo.srcObject = null; elements.localVideo.srcObject = null;
+        elements.callOverlay.classList.add('hidden'); isInCall = false; isCallInitiator = false;
+        log('Call ended');
+    }
+
+    function toggleMic() { if (!localStream) return; const t = localStream.getAudioTracks()[0]; if (t) { t.enabled = !t.enabled; elements.toggleMicBtn.classList.toggle('active', t.enabled); elements.toggleMicBtn.textContent = t.enabled ? '🎤' : '🔇'; } }
+    function toggleCam() { if (!localStream) return; const t = localStream.getVideoTracks()[0]; if (t) { t.enabled = !t.enabled; elements.toggleCamBtn.classList.toggle('active', t.enabled); elements.toggleCamBtn.textContent = t.enabled ? '📷' : '📸'; } }
+    function toggleSpeaker() { if (!elements.remoteVideo) return; const isSpeaker = elements.remoteVideo.audioOutputType !== 'speaker'; if (typeof elements.remoteVideo.setSinkId === 'function') { elements.remoteVideo.setSinkId(isSpeaker ? 'speaker' : '').catch(() => {}); } elements.toggleSpeakerBtn.classList.toggle('active', isSpeaker); elements.toggleSpeakerBtn.textContent = isSpeaker ? '🔊' : '🔈'; }
+
+    let pendingAudioCallback = null, pendingCameraCallback = null, pendingAudioFailCallback = null, pendingCameraFailCallback = null;
+
+    function requestAudioPermission(onGranted, onDenied) {
+        if (window.AndroidBridge) { pendingAudioCallback = onGranted; pendingAudioFailCallback = onDenied || (() => {}); window.AndroidBridge.requestAudioPermission(); }
+        else { onGranted(); }
+    }
+    function requestCameraPermission(onGranted, onDenied) {
+        if (window.AndroidBridge) { pendingCameraCallback = onGranted; pendingCameraFailCallback = onDenied || (() => {}); window.AndroidBridge.requestCameraPermission(); }
+        else { onGranted(); }
+    }
+
+    window.onAudioPermissionResult = (granted) => { audioPermissionGranted = granted; if (granted) { if (pendingAudioCallback) { pendingAudioCallback(); pendingAudioCallback = null; } } else { log('Audio permission denied', true); if (pendingAudioFailCallback) { pendingAudioFailCallback(); pendingAudioFailCallback = null; } } };
+    window.onCameraPermissionResult = (granted) => { cameraPermissionGranted = granted; if (granted) { if (pendingCameraCallback) { pendingCameraCallback(); pendingCameraCallback = null; } } else { log('Camera permission denied', true); if (pendingCameraFailCallback) { pendingCameraFailCallback(); pendingCameraFailCallback = null; } } };
+
+    window.isModalOpen = () => { return (!elements.settingsModal.classList.contains('hidden') || !elements.blockedModal.classList.contains('hidden') || !elements.knownModal.classList.contains('hidden')).toString(); };
+    window.closeTopModal = () => { if (!elements.settingsModal.classList.contains('hidden')) elements.settingsModal.classList.add('hidden'); else if (!elements.blockedModal.classList.contains('hidden')) elements.blockedModal.classList.add('hidden'); else if (!elements.knownModal.classList.contains('hidden')) elements.knownModal.classList.add('hidden'); };
+
+    window.onQrScanResult = (res) => { elements.remoteIdInput.value = res; connectToPeer(res); };
+    window.onFilePicked = (file) => { if (file && conn && conn.open) { conn.send({ type: 'file', name: file.name, size: file.size, data: file.data }); addMessage(`Sent: ${file.name}`, 'system'); } };
+    window.onFileSaved = (path) => { const folder = settings.saveFolder.value.trim(); if (folder) addMessage(`Saved to Downloads/${folder}`, 'system'); else addMessage('Saved to Downloads', 'system'); };
 
     elements.connectBtn.addEventListener('click', () => connectToPeer(elements.remoteIdInput.value.trim()));
-    elements.sendBtn.addEventListener('click', () => {
-        const text = elements.messageInput.value.trim();
-        if (text && conn && conn.open) {
-            conn.send(JSON.stringify({ type: 'chat', text }));
-            addMessage(text, 'sent');
-            elements.messageInput.value = '';
-        }
-    });
+    elements.sendBtn.addEventListener('click', () => { const text = elements.messageInput.value.trim(); if (text && conn && conn.open) { conn.send(JSON.stringify({ type: 'chat', text })); addMessage(text, 'sent'); elements.messageInput.value = ''; } });
     elements.endChatBtn.addEventListener('click', endCurrentChat);
     elements.blockBtn.addEventListener('click', blockCurrentPeer);
     elements.skipBtn.addEventListener('click', skipCurrentPeer);
@@ -1206,16 +671,10 @@
     elements.closeBlockedBtn.addEventListener('click', () => elements.blockedModal.classList.add('hidden'));
     elements.showKnownBtn.addEventListener('click', showKnownModal);
     elements.closeKnownBtn.addEventListener('click', () => elements.knownModal.classList.add('hidden'));
-    elements.clearBlockedBtn.addEventListener('click', () => {
-        blockedPeers.clear();
-        saveBlockedPeers();
-        showBlockedModal();
-    });
-    elements.clearKnownBtn.addEventListener('click', () => {
-        knownPeers.clear();
-        saveKnownPeers();
-        showKnownModal();
-    });
+    elements.clearBlockedBtn.addEventListener('click', () => { blockedPeers.clear(); saveBlockedPeers(); showBlockedModal(); });
+    elements.clearKnownBtn.addEventListener('click', () => { knownPeers.clear(); saveKnownPeers(); showKnownModal(); });
+    elements.acceptCallBtn.addEventListener('click', acceptIncomingCall);
+    elements.declineCallBtn.addEventListener('click', declineIncomingCall);
 
     function onSettingChange() { saveSettings(); }
     settings.autoReconnect.addEventListener('change', onSettingChange);
@@ -1231,44 +690,18 @@
     settings.proxyUrl.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.reuseId.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.autoAnswer.addEventListener('change', () => { saveSettings(); });
-    settings.autoStartBoot.addEventListener('change', () => {
-        saveSettings();
-        if (window.AndroidBridge) {
-            window.AndroidBridge.setAutoStartBoot(settings.autoStartBoot.checked);
-        }
-    });
+    settings.autoStartBoot.addEventListener('change', () => { saveSettings(); if (window.AndroidBridge) window.AndroidBridge.setAutoStartBoot(settings.autoStartBoot.checked); });
 
-    elements.resetSettingsBtn.addEventListener('click', () => {
-        resetAllSettings();
-        elements.settingsModal.classList.add('hidden');
-    });
-
+    elements.resetSettingsBtn.addEventListener('click', () => { resetAllSettings(); elements.settingsModal.classList.add('hidden'); });
     elements.openSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
     elements.closeSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
     elements.newIdBtn.addEventListener('click', initPeer);
     elements.shareQrBtn.addEventListener('click', shareQrCode);
     elements.scanQrBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.scanQrCode());
-    elements.copyIdBtn.addEventListener('click', () => {
-        if (localId) {
-            if (window.AndroidBridge) window.AndroidBridge.copyToClipboard(localId);
-            elements.copyIdBtn.textContent = 'Copied';
-            setTimeout(() => elements.copyIdBtn.textContent = 'Copy', 2000);
-        }
-    });
+    elements.copyIdBtn.addEventListener('click', () => { if (localId) { if (window.AndroidBridge) window.AndroidBridge.copyToClipboard(localId); elements.copyIdBtn.textContent = 'Copied'; setTimeout(() => elements.copyIdBtn.textContent = 'Copy', 2000); } });
     elements.pickFileBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.pickFile());
-    elements.nudgeBtn.addEventListener('click', () => {
-        if (conn && conn.open) {
-            conn.send(JSON.stringify({ type: 'nudge' }));
-            addMessage('Nudge sent!', 'system');
-        }
-    });
-    elements.checkUpdateBtn.addEventListener('click', () => {
-        if (window.AndroidBridge) {
-            window.AndroidBridge.openUrl(GITHUB_REPO_URL);
-        } else {
-            window.open(GITHUB_REPO_URL, '_blank');
-        }
-    });
+    elements.nudgeBtn.addEventListener('click', () => { if (conn && conn.open) { conn.send(JSON.stringify({ type: 'nudge' })); addMessage('Nudge sent!', 'system'); } });
+    elements.checkUpdateBtn.addEventListener('click', () => { if (window.AndroidBridge) window.AndroidBridge.openUrl(GITHUB_REPO_URL); else window.open(GITHUB_REPO_URL, '_blank'); });
     elements.shareAppBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.shareApp(GITHUB_REPO_URL));
 
     elements.voiceNoteBtn.addEventListener('mousedown', startVoiceNote);
@@ -1284,21 +717,15 @@
     elements.toggleMicBtn.addEventListener('click', toggleMic);
     elements.toggleCamBtn.addEventListener('click', toggleCam);
     elements.toggleSpeakerBtn.addEventListener('click', toggleSpeaker);
-    elements.acceptCallBtn.addEventListener('click', acceptIncomingCall);
-    elements.declineCallBtn.addEventListener('click', declineIncomingCall);
 
     settings.useTurn.addEventListener('change', initPeer);
     settings.screenOn.addEventListener('change', applyScreenSetting);
 
-    loadSettings();
-    loadBlockedPeers();
-    loadKnownPeers();
-    detectNetwork();
+    loadSettings(); loadBlockedPeers(); loadKnownPeers(); detectNetwork();
     if (window.AndroidBridge) {
         persistentId = window.AndroidBridge.getPersistentId();
         window.AndroidBridge.requestAudioPermission();
         window.AndroidBridge.requestCameraPermission();
     }
-    initPeer();
-    applyScreenSetting();
+    initPeer(); applyScreenSetting();
 })();

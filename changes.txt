@@ -1,4 +1,17 @@
 Project implementation started
+Update 1.0.26
+- Rebuilt on v1.0.17 base (working lobby, calls, ID generation).
+- Added: Accept/Decline incoming call dialog with caller ID.
+- Added: Auto Answer Calls toggle (default ON for full duplex).
+- Added: Reuse Last ID, Auto Start on Boot, Reset All Settings toggles.
+- Added: Share QR Code button + tap QR to save to Downloads.
+- Added: Remove All Blocked/Known buttons, individual Remove per known user.
+- Added: Call buttons use icons (🎤📷🔊📞) with text fallback.
+- Fixed: Starting new call ends current call instead of blocking.
+- Fixed: Incoming call ends current call instead of rejecting.
+- Fixed: Permissions requested on startup for immediate call readiness.
+- Incremented version to 1.0.26 (v26).
+
 Update 1.0.25
 - Fixed: Starting a new call now ends any existing call instead of blocking.
 - Fixed: Incoming call now ends current call instead of rejecting it.

@@ -1,4 +1,11 @@
 Project implementation started
+Update 1.0.24
+- Fixed: QR code connection - removed retry loop that broke direct connections.
+- Fixed: Incoming connections now replace existing conn instead of rejecting.
+- Fixed: Status shows "Ready" when peer initialized, "Ready (offline mode)" on timeout.
+- Fixed: Peer init timeout increased to 5s for slower networks.
+- Incremented version to 1.0.24 (v24).
+
 Update 1.0.23
 - Fixed: All UI sections now visible immediately on app start (removed hidden-until-ready).
 - Fixed: Peer ID and QR code update in-place when generated.

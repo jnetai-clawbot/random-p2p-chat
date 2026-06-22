@@ -43,8 +43,6 @@
     let audioPermissionGranted = false;
     let cameraPermissionGranted = false;
     let peerInitTimeout = null;
-    let connectRetryCount = 0;
-    let connectRetryTimer = null;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -332,11 +330,14 @@
             localId = id;
             localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
-            updateStatus('Disconnected', 'status-disconnected');
+            updateStatus('Ready', 'status-disconnected');
             generateQrCode(id);
         });
         peer.on('connection', (connection) => {
-            if (conn) { connection.close(); return; }
+            if (conn) {
+                try { conn.close(); } catch(e) {}
+                conn = null;
+            }
             setupConnection(connection);
         });
         peer.on('call', (call) => {
@@ -359,10 +360,10 @@
                 localId = idToUse;
                 localStorage.setItem(LAST_ID_KEY, idToUse);
                 elements.localId.textContent = idToUse;
-                updateStatus('Disconnected', 'status-disconnected');
+                updateStatus('Ready (offline mode)', 'status-disconnected');
                 generateQrCode(idToUse);
             }
-        }, 3000);
+        }, 5000);
     }
 
     function generateQrCode(text) {
@@ -510,45 +511,8 @@
 
     function connectToPeer(id) {
         if (!id) return;
-        connectRetryCount = 0;
-        clearTimeout(connectRetryTimer);
         updateStatus(`Connecting...`, 'status-connecting');
-        doConnectToPeer(id);
-    }
-
-    function doConnectToPeer(id) {
-        if (!id || !peer) return;
-        const connection = peer.connect(id, { reliable: true });
-        let connected = false;
-        connection.on('open', () => {
-            connected = true;
-            clearTimeout(connectRetryTimer);
-            connectRetryCount = 0;
-            setupConnection(connection);
-        });
-        connection.on('error', (err) => {
-            log(`Connection error: ${err}`, true);
-            if (!connected) scheduleConnectRetry(id);
-        });
-        setTimeout(() => {
-            if (!connected) {
-                try { connection.close(); } catch(e) {}
-                scheduleConnectRetry(id);
-            }
-        }, 8000);
-    }
-
-    function scheduleConnectRetry(id) {
-        if (connectRetryCount >= 5) {
-            log('Connection failed after 5 retries', true);
-            updateStatus('Disconnected', 'status-disconnected');
-            return;
-        }
-        connectRetryCount++;
-        const delay = connectRetryCount * 2000;
-        log(`Connection retry ${connectRetryCount}/5 in ${delay/1000}s`);
-        clearTimeout(connectRetryTimer);
-        connectRetryTimer = setTimeout(() => doConnectToPeer(id), delay);
+        setupConnection(peer.connect(id, { reliable: true }));
     }
 
     function handleNudge() {

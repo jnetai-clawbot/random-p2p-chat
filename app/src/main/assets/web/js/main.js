@@ -334,7 +334,6 @@
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
-            onPeerReady();
         });
         peer.on('connection', (connection) => {
             if (conn) { connection.close(); return; }
@@ -362,15 +361,8 @@
                 elements.localId.textContent = idToUse;
                 updateStatus('Disconnected', 'status-disconnected');
                 generateQrCode(idToUse);
-                onPeerReady();
             }
         }, 3000);
-    }
-
-    function onPeerReady() {
-        elements.idSection.classList.remove('hidden');
-        elements.randomSection.classList.remove('hidden');
-        elements.connectSection.classList.remove('hidden');
     }
 
     function generateQrCode(text) {

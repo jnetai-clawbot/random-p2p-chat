@@ -1,4 +1,9 @@
 Project implementation started
+Update 1.0.23
+- Fixed: All UI sections now visible immediately on app start (removed hidden-until-ready).
+- Fixed: Peer ID and QR code update in-place when generated.
+- Incremented version to 1.0.23 (v23).
+
 Update 1.0.22
 - Fixed: Connect buttons hidden until peer ID + QR code generated successfully.
 - Fixed: Connection retry up to 5 times with 2s-10s delays when pairing fails.

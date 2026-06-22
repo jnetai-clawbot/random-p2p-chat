@@ -1,4 +1,12 @@
 Project implementation started
+Update 1.0.22
+- Fixed: Connect buttons hidden until peer ID + QR code generated successfully.
+- Fixed: Connection retry up to 5 times with 2s-10s delays when pairing fails.
+- Fixed: QR code tap/share saves to Downloads folder via bridge.
+- Added: saveQrImage() bridge method for saving QR to Downloads.
+- Added: onPeerReady() to show UI sections only after ID is ready.
+- Incremented version to 1.0.22 (v22).
+
 Update 1.0.21
 - Fixed: Peer ID timeout now uses fallback ID + QR code instead of retrying.
 - Added: "Share QR Code" button to download QR as PNG image.

@@ -157,6 +157,25 @@ class WebViewBridge(
         }
     }
 
+    @JavascriptInterface
+    fun saveQrImage(base64Data: String) {
+        try {
+            val data = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+            val savedFile = FileHandler.saveReceivedFile("p2p-random-chat-qr.png", data, "")
+            webView.post {
+                if (savedFile != null) {
+                    webView.evaluateJavascript(
+                        "window.onQrSaved('${escapeJs(savedFile.absolutePath)}')", null
+                    )
+                } else {
+                    webView.evaluateJavascript("window.onQrSavedError('Could not save QR image')", null)
+                }
+            }
+        } catch (e: Exception) {
+            ErrorLogger.e("WebViewBridge", "WB009", "Failed to save QR image", e)
+        }
+    }
+
     fun onQrScanResult(result: String) {
         webView.post {
             webView.evaluateJavascript("window.onQrScanResult('${escapeJs(result)}')", null)

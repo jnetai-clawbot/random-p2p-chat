@@ -43,6 +43,8 @@
     let audioPermissionGranted = false;
     let cameraPermissionGranted = false;
     let peerInitTimeout = null;
+    let connectRetryCount = 0;
+    let connectRetryTimer = null;
 
     const elements = {
         localId: document.getElementById('local-id'),
@@ -332,6 +334,7 @@
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
+            onPeerReady();
         });
         peer.on('connection', (connection) => {
             if (conn) { connection.close(); return; }
@@ -359,8 +362,15 @@
                 elements.localId.textContent = idToUse;
                 updateStatus('Disconnected', 'status-disconnected');
                 generateQrCode(idToUse);
+                onPeerReady();
             }
         }, 3000);
+    }
+
+    function onPeerReady() {
+        elements.idSection.classList.remove('hidden');
+        elements.randomSection.classList.remove('hidden');
+        elements.connectSection.classList.remove('hidden');
     }
 
     function generateQrCode(text) {
@@ -389,16 +399,30 @@
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
-        canvas.toBlob(blob => {
-            if (!blob) return;
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'p2p-random-chat-qr.png';
-            a.click();
-            URL.revokeObjectURL(url);
-        }, 'image/png');
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        if (window.AndroidBridge) {
+            window.AndroidBridge.saveQrImage(base64);
+        } else {
+            canvas.toBlob(blob => {
+                if (!blob) return;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'p2p-random-chat-qr.png';
+                a.click();
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        }
     }
+
+    window.onQrSaved = (path) => {
+        log(`QR saved to ${path}`);
+    };
+
+    window.onQrSavedError = (err) => {
+        log(`QR save error: ${err}`, true);
+    };
 
     function setupConnection(connection) {
         conn = connection;
@@ -494,8 +518,45 @@
 
     function connectToPeer(id) {
         if (!id) return;
+        connectRetryCount = 0;
+        clearTimeout(connectRetryTimer);
         updateStatus(`Connecting...`, 'status-connecting');
-        setupConnection(peer.connect(id, { reliable: true }));
+        doConnectToPeer(id);
+    }
+
+    function doConnectToPeer(id) {
+        if (!id || !peer) return;
+        const connection = peer.connect(id, { reliable: true });
+        let connected = false;
+        connection.on('open', () => {
+            connected = true;
+            clearTimeout(connectRetryTimer);
+            connectRetryCount = 0;
+            setupConnection(connection);
+        });
+        connection.on('error', (err) => {
+            log(`Connection error: ${err}`, true);
+            if (!connected) scheduleConnectRetry(id);
+        });
+        setTimeout(() => {
+            if (!connected) {
+                try { connection.close(); } catch(e) {}
+                scheduleConnectRetry(id);
+            }
+        }, 8000);
+    }
+
+    function scheduleConnectRetry(id) {
+        if (connectRetryCount >= 5) {
+            log('Connection failed after 5 retries', true);
+            updateStatus('Disconnected', 'status-disconnected');
+            return;
+        }
+        connectRetryCount++;
+        const delay = connectRetryCount * 2000;
+        log(`Connection retry ${connectRetryCount}/5 in ${delay/1000}s`);
+        clearTimeout(connectRetryTimer);
+        connectRetryTimer = setTimeout(() => doConnectToPeer(id), delay);
     }
 
     function handleNudge() {

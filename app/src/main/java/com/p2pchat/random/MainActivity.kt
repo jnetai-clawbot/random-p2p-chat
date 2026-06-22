@@ -75,8 +75,8 @@ class MainActivity : AppCompatActivity() {
         ErrorLogger.init(this)
         FileHandler.init(this)
         ErrorLogger.i("MainActivity", "onCreate started", mapOf(
-            "versionCode" to "24",
-            "versionName" to "1.0.24"
+            "versionCode" to "25",
+            "versionName" to "1.0.25"
         ))
 
         webView = WebView(this).apply {

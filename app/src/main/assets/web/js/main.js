@@ -930,8 +930,8 @@
             return;
         }
         if (isInCall) {
-            log('Already in a call', true);
-            return;
+            log('Ending current call to start new one');
+            endCall();
         }
         isInCall = true;
         isCallInitiator = true;
@@ -995,7 +995,10 @@
 
     function answerIncomingCall(call) {
         log(`Incoming call from ${call.peer}, metadata: ${JSON.stringify(call.metadata)}`);
-        if (isInCall) { call.close(); return; }
+        if (isInCall) {
+            log('Ending current call to answer incoming');
+            endCall();
+        }
         isInCall = true;
         isCallInitiator = false;
         const isVideo = call.metadata && call.metadata.video;

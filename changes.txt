@@ -1,4 +1,10 @@
 Project implementation started
+Update 1.0.25
+- Fixed: Starting a new call now ends any existing call instead of blocking.
+- Fixed: Incoming call now ends current call instead of rejecting it.
+- Calls work bidirectionally - no more "already in a call" blocking.
+- Incremented version to 1.0.25 (v25).
+
 Update 1.0.24
 - Fixed: QR code connection - removed retry loop that broke direct connections.
 - Fixed: Incoming connections now replace existing conn instead of rejecting.

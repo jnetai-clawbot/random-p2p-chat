@@ -158,7 +158,7 @@
                 if (saved.autoAnswer !== undefined) settings.autoAnswer.checked = saved.autoAnswer;
                 if (saved.autoStartBoot !== undefined) settings.autoStartBoot.checked = saved.autoStartBoot;
             }
-        } catch (e) {}
+        } catch (e) { /* ignore */ }
     }
 
     function saveSettings() {
@@ -178,7 +178,7 @@
                 autoAnswer: settings.autoAnswer.checked,
                 autoStartBoot: settings.autoStartBoot.checked
             }));
-        } catch (e) {}
+        } catch (e) { /* ignore */ }
     }
 
     function resetAllSettings() {
@@ -447,9 +447,25 @@
             const a = lobbyQueue.shift(), b = lobbyQueue.shift();
             if (skippedPeers.has(b.persistentId) && !skippedPeers.has(a.persistentId)) { lobbyQueue.unshift(b); continue; }
             if (skippedPeers.has(a.persistentId) && !skippedPeers.has(b.persistentId)) { lobbyQueue.unshift(a); continue; }
-            if (a.isHost) { b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId })); setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(b.peerId); log(`Host paired: ${a.peerId} <-> ${b.peerId}`); }
-            else if (b.isHost) { a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId })); setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(a.peerId); log(`Host paired: ${b.peerId} <-> ${a.peerId}`); }
-            else { a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId })); b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId })); setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500); setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500); log(`Paired: ${a.peerId} <-> ${b.peerId}`); }
+            if (a.isHost) {
+                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+                isSearching = false; updateSearchUI(false); leaveLobby();
+                setTimeout(() => connectToPeer(b.peerId), 1000);
+                log(`Host paired: ${a.peerId} <-> ${b.peerId}`);
+            } else if (b.isHost) {
+                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                isSearching = false; updateSearchUI(false); leaveLobby();
+                setTimeout(() => connectToPeer(a.peerId), 1000);
+                log(`Host paired: ${b.peerId} <-> ${a.peerId}`);
+            } else {
+                a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
+                b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+                log(`Paired: ${a.peerId} <-> ${b.peerId}`);
+            }
         }
     }
 
@@ -573,17 +589,19 @@
     function startCall(withVideo) {
         if (!conn || !conn.open) { log('Cannot start call: not connected', true); return; }
         if (isInCall) { log('Ending current call to start new one'); endCall(); }
-        isInCall = true; isCallInitiator = true;
-        const needsCamera = withVideo;
-        if (audioPermissionGranted) {
-            if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
-            else { doStartCall(withVideo); }
-        } else {
-            requestAudioPermission(() => {
+        setTimeout(() => {
+            isInCall = true; isCallInitiator = true;
+            const needsCamera = withVideo;
+            if (audioPermissionGranted) {
                 if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
                 else { doStartCall(withVideo); }
-            }, () => { isInCall = false; isCallInitiator = false; });
-        }
+            } else {
+                requestAudioPermission(() => {
+                    if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
+                    else { doStartCall(withVideo); }
+                }, () => { isInCall = false; isCallInitiator = false; });
+            }
+        }, 300);
     }
 
     function doStartCall(withVideo) {
@@ -609,12 +627,14 @@
     function answerIncomingCall(call) {
         log(`Answering call from ${call.peer}`);
         if (isInCall) { log('Ending current call to answer incoming'); endCall(); }
-        isInCall = true; isCallInitiator = false;
-        const isVideo = call.metadata && call.metadata.video;
-        const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
-        if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) { doAnswerCall(call, constraints, isVideo); }
-        else if (!audioPermissionGranted) { requestAudioPermission(() => { if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); } else { doAnswerCall(call, constraints, isVideo); } }, () => { call.close(); isInCall = false; }); }
-        else if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); }
+        setTimeout(() => {
+            isInCall = true; isCallInitiator = false;
+            const isVideo = call.metadata && call.metadata.video;
+            const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
+            if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) { doAnswerCall(call, constraints, isVideo); }
+            else if (!audioPermissionGranted) { requestAudioPermission(() => { if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); } else { doAnswerCall(call, constraints, isVideo); } }, () => { call.close(); isInCall = false; }); }
+            else if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); }
+        }, 300);
     }
 
     function doAnswerCall(call, constraints, isVideo) {

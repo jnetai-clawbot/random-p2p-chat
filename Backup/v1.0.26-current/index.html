@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Random P2P Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="header-content">
+                <h1>Random P2P Chat</h1>
+                <button id="open-settings-btn" class="icon-btn" title="Settings">⚙️</button>
+            </div>
+            <div id="connection-status" class="status-disconnected">Disconnected</div>
+        </header>
+
+        <main>
+            <!-- ID Section -->
+            <section id="id-section">
+                <div class="card">
+                    <label>Your Peer ID / Pin:</label>
+                    <div class="id-display">
+                        <span id="local-id">Generating...</span>
+                        <button id="copy-id-btn" class="icon-btn" title="Copy ID">📋</button>
+                    </div>
+                    <div id="qrcode-container" class="qr-box"></div>
+                    <button id="share-qr-btn" class="secondary-btn full-width hidden">Share QR Code</button>
+                    <button id="new-id-btn" class="secondary-btn full-width">Get New ID / QR</button>
+                    <button id="scan-qr-btn" class="primary-btn full-width">Scan QR to Connect</button>
+                </div>
+            </section>
+
+            <!-- Random Pairing Section -->
+            <section id="random-section">
+                <div class="card">
+                    <label>Random Pairing</label>
+                    <p class="random-desc">Auto-connect with a random user using the same app.</p>
+                    <div id="search-status" class="search-status hidden">
+                        <span class="search-spinner"></span>
+                        <span id="search-status-text">Searching for a random user...</span>
+                    </div>
+                    <button id="connect-random-btn" class="primary-btn full-width">Connect with Random User</button>
+                    <button id="cancel-search-btn" class="secondary-btn full-width hidden">Cancel Search</button>
+                    <div class="button-group">
+                        <button id="show-blocked-btn" class="secondary-btn small-btn">Blocked Users</button>
+                        <button id="show-known-btn" class="secondary-btn small-btn">Known Users</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Connect Section -->
+            <section id="connect-section">
+                <div class="card">
+                    <label for="remote-id-input">Connect to Peer ID / Pin:</label>
+                    <div class="input-group">
+                        <input type="text" id="remote-id-input" placeholder="Enter ID or Pin">
+                        <button id="connect-btn" class="primary-btn">Connect</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chat Section -->
+            <section id="chat-section" class="hidden">
+                <div id="chat-messages"></div>
+                <div id="transfer-progress" class="hidden">
+                    <div class="progress-bar"><div id="progress-fill"></div></div>
+                    <span id="progress-text">Sending file...</span>
+                </div>
+                <div id="input-area">
+                    <button id="voice-note-btn" class="icon-btn" title="Hold to Record Voice Note">🎤</button>
+                    <button id="pick-file-btn" class="icon-btn" title="Send File">📎</button>
+                    <input type="text" id="message-input" placeholder="Type a message...">
+                    <button id="send-btn" class="primary-btn">Send</button>
+                </div>
+                <div id="nudge-area">
+                    <button id="nudge-btn" class="secondary-btn">Nudge</button>
+                    <button id="voice-call-btn" class="primary-btn">Voice Call</button>
+                    <button id="video-call-btn" class="primary-btn">Video Call</button>
+                    <button id="block-btn" class="danger-btn">Block</button>
+                    <button id="skip-btn" class="secondary-btn">Skip</button>
+                    <button id="end-chat-btn" class="danger-btn">End Chat</button>
+                </div>
+            </section>
+
+            <!-- Voice Note Recording Indicator -->
+            <div id="voice-note-indicator" class="voice-note-indicator hidden">
+                <span class="recording-dot"></span>
+                <span id="voice-note-timer">00:00</span>
+                <span class="recording-hint">Release to send</span>
+            </div>
+
+            <!-- Call Overlay -->
+            <div id="call-overlay" class="call-overlay hidden">
+                <div class="call-video-container">
+                    <video id="remote-video" class="remote-video" autoplay playsinline></video>
+                    <video id="local-video" class="local-video" autoplay playsinline muted></video>
+                </div>
+                <div id="call-controls" class="call-controls">
+                    <button id="toggle-mic-btn" class="call-btn active" title="Mute Mic">🎤</button>
+                    <button id="toggle-cam-btn" class="call-btn active" title="Turn Off Camera">📷</button>
+                    <button id="toggle-speaker-btn" class="call-btn active" title="Speaker">🔊</button>
+                    <button id="hangup-btn" class="call-btn danger" title="Hang Up">📞</button>
+                </div>
+                <div id="call-status-text" class="call-status-text">Connecting...</div>
+            </div>
+
+            <!-- Incoming Call Dialog -->
+            <div id="incoming-call-dialog" class="incoming-call-dialog hidden">
+                <div class="incoming-call-content">
+                    <h2 id="incoming-call-title">Incoming Call</h2>
+                    <p id="incoming-call-peer">Unknown</p>
+                    <div class="incoming-call-buttons">
+                        <button id="accept-call-btn" class="call-btn accept">✅ Accept</button>
+                        <button id="decline-call-btn" class="call-btn danger">❌ Decline</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Blocked Users Modal -->
+            <div id="blocked-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Blocked Users</h2>
+                        <button id="close-blocked-btn" class="icon-btn">X</button>
+                    </div>
+                    <div id="blocked-list" class="user-list"></div>
+                    <button id="clear-blocked-btn" class="danger-btn full-width" style="margin-top:0.75rem">Remove All Blocked</button>
+                </div>
+            </div>
+
+            <!-- Known Users Modal -->
+            <div id="known-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Known Users</h2>
+                        <button id="close-known-btn" class="icon-btn">X</button>
+                    </div>
+                    <div id="known-list" class="user-list"></div>
+                    <button id="clear-known-btn" class="danger-btn full-width" style="margin-top:0.75rem">Remove All Known</button>
+                </div>
+            </div>
+
+            <!-- Settings Modal -->
+            <div id="settings-modal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Settings</h2>
+                        <button id="close-settings-btn" class="icon-btn">✖</button>
+                    </div>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <span>Auto Reconnect</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-auto-reconnect" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Keep Screen On</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-screen-on" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Allow File Transfers</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-allow-files" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label for="setting-save-folder">Save Folder (leave empty for Downloads root)</label>
+                            <input type="text" id="setting-save-folder" placeholder="e.g. P2PChat">
+                        </div>
+                        <div class="setting-item">
+                            <span>Vibrate on Nudge</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-vibrate" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Enable TURN (Global P2P)</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-use-turn" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Debug Logging</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-debug" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Reuse Last ID</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-reuse-id">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Auto Answer Calls</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-auto-answer" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Auto Start on Boot</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-auto-start-boot">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h3>Network Settings</h3>
+                        <div class="setting-item">
+                            <span>IPv4</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-ipv4" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>IPv6</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-ipv6" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>TCP Transport</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-tcp" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>UDP Transport</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-udp" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-group">
+                            <label for="setting-proxy-url">Proxy TURN URL (advanced)</label>
+                            <input type="text" id="setting-proxy-url" placeholder="turn:proxy.example.com:3478">
+                        </div>
+                    </div>
+                    <div class="connection-info">
+                        <h3>Connection Info</h3>
+                        <p>Public IP: <span id="public-ip">Detecting...</span></p>
+                        <p>WebRTC Support: <span id="webrtc-support">Checking...</span></p>
+                    </div>
+                    <button id="reset-settings-btn" class="danger-btn full-width" style="margin-top:1rem">Reset All Settings</button>
+                </div>
+            </div>
+
+            <section id="about-section">
+                <div class="card about-card">
+                    <p>Made by <a href="https://jnetai.com" target="_blank">jnetai.com</a></p>
+                    <p>Version: <span id="app-version">1.0.26</span></p>
+                    <div class="button-group">
+                        <button id="check-update-btn" class="secondary-btn small-btn">Check for Update</button>
+                        <button id="share-app-btn" class="secondary-btn small-btn">Share App</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <div id="debug-log"></div>
+        </footer>
+    </div>
+
+    <script src="js/peerjs.min.js"></script>
+    <script src="js/qrcode.min.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

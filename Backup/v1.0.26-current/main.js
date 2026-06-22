@@ -449,17 +449,21 @@
             if (skippedPeers.has(a.persistentId) && !skippedPeers.has(b.persistentId)) { lobbyQueue.unshift(a); continue; }
             if (a.isHost) {
                 b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
-                isSearching = false; updateSearchUI(false);
-                setTimeout(() => { leaveLobby(); connectToPeer(b.peerId); }, 500);
-                log(`Host paired with client: ${a.peerId} <-> ${b.peerId}`);
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
+                isSearching = false; updateSearchUI(false); leaveLobby();
+                setTimeout(() => connectToPeer(b.peerId), 1000);
+                log(`Host paired: ${a.peerId} <-> ${b.peerId}`);
             } else if (b.isHost) {
                 a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
-                isSearching = false; updateSearchUI(false);
-                setTimeout(() => { leaveLobby(); connectToPeer(a.peerId); }, 500);
-                log(`Host paired with client: ${b.peerId} <-> ${a.peerId}`);
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                isSearching = false; updateSearchUI(false); leaveLobby();
+                setTimeout(() => connectToPeer(a.peerId), 1000);
+                log(`Host paired: ${b.peerId} <-> ${a.peerId}`);
             } else {
                 a.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: b.peerId }));
                 b.conn.send(JSON.stringify({ type: 'lobby_paired', peerId: a.peerId }));
+                setTimeout(() => { try { a.conn.close(); } catch(e) {} }, 500);
+                setTimeout(() => { try { b.conn.close(); } catch(e) {} }, 500);
                 log(`Paired: ${a.peerId} <-> ${b.peerId}`);
             }
         }
@@ -477,7 +481,7 @@
         conn.on('data', (data) => {
             try {
                 const msg = JSON.parse(data);
-                if (msg.type === 'lobby_paired') { log(`Lobby matched: ${msg.peerId}`); isSearching = false; updateSearchUI(false); leaveLobby(); }
+                if (msg.type === 'lobby_paired') { log(`Lobby matched: ${msg.peerId}`); isSearching = false; updateSearchUI(false); leaveLobby(); connectToPeer(msg.peerId); }
                 else if (msg.type === 'lobby_reject') { log(`Lobby rejected: ${msg.reason}`, true); leaveLobby(); if (isSearching) scheduleLobbyRetry(); }
             } catch (e) {}
         });
@@ -584,22 +588,20 @@
 
     function startCall(withVideo) {
         if (!conn || !conn.open) { log('Cannot start call: not connected', true); return; }
-        if (isInCall) { log('Ending current call to start new one'); endCall(); setTimeout(() => doStartCallFlow(withVideo), 300); }
-        else { doStartCallFlow(withVideo); }
-    }
-
-    function doStartCallFlow(withVideo) {
-        isInCall = true; isCallInitiator = true;
-        const needsCamera = withVideo;
-        if (audioPermissionGranted) {
-            if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
-            else { doStartCall(withVideo); }
-        } else {
-            requestAudioPermission(() => {
+        if (isInCall) { log('Ending current call to start new one'); endCall(); }
+        setTimeout(() => {
+            isInCall = true; isCallInitiator = true;
+            const needsCamera = withVideo;
+            if (audioPermissionGranted) {
                 if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
                 else { doStartCall(withVideo); }
-            }, () => { isInCall = false; isCallInitiator = false; });
-        }
+            } else {
+                requestAudioPermission(() => {
+                    if (needsCamera && !cameraPermissionGranted) { requestCameraPermission(() => doStartCall(withVideo), () => { isInCall = false; isCallInitiator = false; }); }
+                    else { doStartCall(withVideo); }
+                }, () => { isInCall = false; isCallInitiator = false; });
+            }
+        }, 300);
     }
 
     function doStartCall(withVideo) {
@@ -624,17 +626,15 @@
 
     function answerIncomingCall(call) {
         log(`Answering call from ${call.peer}`);
-        if (isInCall) { log('Ending current call to answer incoming'); endCall(); setTimeout(() => doAnswerCallFlow(call), 300); }
-        else { doAnswerCallFlow(call); }
-    }
-
-    function doAnswerCallFlow(call) {
-        isInCall = true; isCallInitiator = false;
-        const isVideo = call.metadata && call.metadata.video;
-        const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
-        if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) { doAnswerCall(call, constraints, isVideo); }
-        else if (!audioPermissionGranted) { requestAudioPermission(() => { if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); } else { doAnswerCall(call, constraints, isVideo); } }, () => { call.close(); isInCall = false; }); }
-        else if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); }
+        if (isInCall) { log('Ending current call to answer incoming'); endCall(); }
+        setTimeout(() => {
+            isInCall = true; isCallInitiator = false;
+            const isVideo = call.metadata && call.metadata.video;
+            const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true, video: false };
+            if (audioPermissionGranted && (!isVideo || cameraPermissionGranted)) { doAnswerCall(call, constraints, isVideo); }
+            else if (!audioPermissionGranted) { requestAudioPermission(() => { if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); } else { doAnswerCall(call, constraints, isVideo); } }, () => { call.close(); isInCall = false; }); }
+            else if (isVideo && !cameraPermissionGranted) { requestCameraPermission(() => doAnswerCall(call, constraints, isVideo), () => { call.close(); isInCall = false; }); }
+        }, 300);
     }
 
     function doAnswerCall(call, constraints, isVideo) {

@@ -35,6 +35,7 @@
     let localStream = null;
     let isInCall = false;
     let isCallInitiator = false;
+    let pendingIncomingCall = null;
     let voiceNoteRecorder = null;
     let voiceNoteChunks = [];
     let voiceNoteTimer = null;
@@ -97,7 +98,13 @@
         showBlockedBtn: document.getElementById('show-blocked-btn'),
         showKnownBtn: document.getElementById('show-known-btn'),
         clearBlockedBtn: document.getElementById('clear-blocked-btn'),
-        clearKnownBtn: document.getElementById('clear-known-btn')
+        clearKnownBtn: document.getElementById('clear-known-btn'),
+        resetSettingsBtn: document.getElementById('reset-settings-btn'),
+        incomingCallDialog: document.getElementById('incoming-call-dialog'),
+        incomingCallTitle: document.getElementById('incoming-call-title'),
+        incomingCallPeer: document.getElementById('incoming-call-peer'),
+        acceptCallBtn: document.getElementById('accept-call-btn'),
+        declineCallBtn: document.getElementById('decline-call-btn')
     };
 
     const settings = {
@@ -112,13 +119,33 @@
         ipv6: document.getElementById('setting-ipv6'),
         tcp: document.getElementById('setting-tcp'),
         udp: document.getElementById('setting-udp'),
-        proxyUrl: document.getElementById('setting-proxy-url')
+        proxyUrl: document.getElementById('setting-proxy-url'),
+        reuseId: document.getElementById('setting-reuse-id'),
+        autoAnswer: document.getElementById('setting-auto-answer')
     };
 
     const GITHUB_REPO_URL = 'https://github.com/jnetai-clawbot/random-p2p-chat/releases';
     const SETTINGS_KEY = 'p2pchat_settings';
     const BLOCKED_KEY = 'p2pchat_blocked';
     const KNOWN_KEY = 'p2pchat_known';
+    const LAST_ID_KEY = 'p2pchat_last_id';
+
+    const DEFAULT_SETTINGS = {
+        autoReconnect: true,
+        screenOn: true,
+        allowFiles: true,
+        vibrate: true,
+        useTurn: true,
+        debug: true,
+        saveFolder: '',
+        ipv4: true,
+        ipv6: true,
+        tcp: true,
+        udp: true,
+        proxyUrl: '',
+        reuseId: false,
+        autoAnswer: false
+    };
 
     function loadSettings() {
         try {
@@ -136,6 +163,8 @@
                 if (saved.tcp !== undefined) settings.tcp.checked = saved.tcp;
                 if (saved.udp !== undefined) settings.udp.checked = saved.udp;
                 if (saved.proxyUrl !== undefined) settings.proxyUrl.value = saved.proxyUrl;
+                if (saved.reuseId !== undefined) settings.reuseId.checked = saved.reuseId;
+                if (saved.autoAnswer !== undefined) settings.autoAnswer.checked = saved.autoAnswer;
             }
         } catch (e) { /* ignore */ }
     }
@@ -154,9 +183,37 @@
                 ipv6: settings.ipv6.checked,
                 tcp: settings.tcp.checked,
                 udp: settings.udp.checked,
-                proxyUrl: settings.proxyUrl.value
+                proxyUrl: settings.proxyUrl.value,
+                reuseId: settings.reuseId.checked,
+                autoAnswer: settings.autoAnswer.checked
             }));
         } catch (e) { /* ignore */ }
+    }
+
+    function resetAllSettings() {
+        localStorage.removeItem(SETTINGS_KEY);
+        localStorage.removeItem(BLOCKED_KEY);
+        localStorage.removeItem(KNOWN_KEY);
+        localStorage.removeItem(LAST_ID_KEY);
+        blockedPeers.clear();
+        knownPeers.clear();
+        settings.autoReconnect.checked = DEFAULT_SETTINGS.autoReconnect;
+        settings.screenOn.checked = DEFAULT_SETTINGS.screenOn;
+        settings.allowFiles.checked = DEFAULT_SETTINGS.allowFiles;
+        settings.vibrate.checked = DEFAULT_SETTINGS.vibrate;
+        settings.useTurn.checked = DEFAULT_SETTINGS.useTurn;
+        settings.debug.checked = DEFAULT_SETTINGS.debug;
+        settings.saveFolder.value = DEFAULT_SETTINGS.saveFolder;
+        settings.ipv4.checked = DEFAULT_SETTINGS.ipv4;
+        settings.ipv6.checked = DEFAULT_SETTINGS.ipv6;
+        settings.tcp.checked = DEFAULT_SETTINGS.tcp;
+        settings.udp.checked = DEFAULT_SETTINGS.udp;
+        settings.proxyUrl.value = DEFAULT_SETTINGS.proxyUrl;
+        settings.reuseId.checked = DEFAULT_SETTINGS.reuseId;
+        settings.autoAnswer.checked = DEFAULT_SETTINGS.autoAnswer;
+        applyScreenSetting();
+        initPeer();
+        log('All settings reset to defaults');
     }
 
     function loadBlockedPeers() {
@@ -249,7 +306,13 @@
 
     function initPeer() {
         if (peer) peer.destroy();
-        const idToUse = generateRandomId();
+        let idToUse;
+        if (settings.reuseId.checked) {
+            const lastId = localStorage.getItem(LAST_ID_KEY);
+            idToUse = lastId || generateRandomId();
+        } else {
+            idToUse = generateRandomId();
+        }
         const iceServers = buildIceServers();
         peer = new Peer(idToUse, {
             config: { iceServers: iceServers, iceTransportPolicy: 'all' },
@@ -257,6 +320,7 @@
         });
         peer.on('open', (id) => {
             localId = id;
+            localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
@@ -268,7 +332,12 @@
         peer.on('call', (call) => {
             log(`Incoming call from ${call.peer}`);
             if (isInCall) { call.close(); return; }
-            answerIncomingCall(call);
+            if (settings.autoAnswer.checked) {
+                log('Auto-answering call');
+                answerIncomingCall(call);
+            } else {
+                showIncomingCallDialog(call);
+            }
         });
         peer.on('error', (err) => {
             log(`Peer error: ${err.type}`, true);
@@ -1012,6 +1081,31 @@
         }
     };
 
+    function showIncomingCallDialog(call) {
+        pendingIncomingCall = call;
+        const isVideo = call.metadata && call.metadata.video;
+        elements.incomingCallTitle.textContent = `Incoming ${isVideo ? 'Video' : 'Voice'} Call`;
+        elements.incomingCallPeer.textContent = `From: ${call.peer}`;
+        elements.incomingCallDialog.classList.remove('hidden');
+    }
+
+    function acceptIncomingCall() {
+        if (!pendingIncomingCall) return;
+        elements.incomingCallDialog.classList.add('hidden');
+        const call = pendingIncomingCall;
+        pendingIncomingCall = null;
+        answerIncomingCall(call);
+    }
+
+    function declineIncomingCall() {
+        if (pendingIncomingCall) {
+            pendingIncomingCall.close();
+            pendingIncomingCall = null;
+        }
+        elements.incomingCallDialog.classList.add('hidden');
+        log('Incoming call declined');
+    }
+
     window.onQrScanResult = (res) => { elements.remoteIdInput.value = res; connectToPeer(res); };
     window.onFilePicked = (file) => {
         if (file && conn && conn.open) {
@@ -1069,6 +1163,13 @@
     settings.tcp.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.udp.addEventListener('change', () => { saveSettings(); initPeer(); });
     settings.proxyUrl.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.reuseId.addEventListener('change', () => { saveSettings(); initPeer(); });
+    settings.autoAnswer.addEventListener('change', () => { saveSettings(); });
+
+    elements.resetSettingsBtn.addEventListener('click', () => {
+        resetAllSettings();
+        elements.settingsModal.classList.add('hidden');
+    });
 
     elements.openSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.remove('hidden'));
     elements.closeSettingsBtn.addEventListener('click', () => elements.settingsModal.classList.add('hidden'));
@@ -1110,6 +1211,8 @@
     elements.toggleMicBtn.addEventListener('click', toggleMic);
     elements.toggleCamBtn.addEventListener('click', toggleCam);
     elements.toggleSpeakerBtn.addEventListener('click', toggleSpeaker);
+    elements.acceptCallBtn.addEventListener('click', acceptIncomingCall);
+    elements.declineCallBtn.addEventListener('click', declineIncomingCall);
 
     settings.useTurn.addEventListener('change', initPeer);
     settings.screenOn.addEventListener('change', applyScreenSetting);

@@ -105,6 +105,18 @@
                 <div id="call-status-text" class="call-status-text">Connecting...</div>
             </div>
 
+            <!-- Incoming Call Dialog -->
+            <div id="incoming-call-dialog" class="incoming-call-dialog hidden">
+                <div class="incoming-call-content">
+                    <h2 id="incoming-call-title">Incoming Call</h2>
+                    <p id="incoming-call-peer">Unknown</p>
+                    <div class="incoming-call-buttons">
+                        <button id="accept-call-btn" class="call-btn accept">✅ Accept</button>
+                        <button id="decline-call-btn" class="call-btn danger">❌ Decline</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Blocked Users Modal -->
             <div id="blocked-modal" class="modal hidden">
                 <div class="modal-content">
@@ -183,6 +195,20 @@
                                 <span class="slider round"></span>
                             </label>
                         </div>
+                        <div class="setting-item">
+                            <span>Reuse Last ID</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-reuse-id">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="setting-item">
+                            <span>Auto Answer Calls</span>
+                            <label class="switch">
+                                <input type="checkbox" id="setting-auto-answer">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
                     </div>
                     <div class="settings-section">
                         <h3>Network Settings</h3>
@@ -224,13 +250,14 @@
                         <p>Public IP: <span id="public-ip">Detecting...</span></p>
                         <p>WebRTC Support: <span id="webrtc-support">Checking...</span></p>
                     </div>
+                    <button id="reset-settings-btn" class="danger-btn full-width" style="margin-top:1rem">Reset All Settings</button>
                 </div>
             </div>
 
             <section id="about-section">
                 <div class="card about-card">
                     <p>Made by <a href="https://jnetai.com" target="_blank">jnetai.com</a></p>
-                    <p>Version: <span id="app-version">1.0.18</span></p>
+                    <p>Version: <span id="app-version">1.0.19</span></p>
                     <div class="button-group">
                         <button id="check-update-btn" class="secondary-btn small-btn">Check for Update</button>
                         <button id="share-app-btn" class="secondary-btn small-btn">Share App</button>

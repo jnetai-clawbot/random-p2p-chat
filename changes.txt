@@ -1,4 +1,12 @@
 Project implementation started
+Update 1.0.19
+- Added: Auto-generate new ID on every app start (unique by default).
+- Added: "Reuse Last ID" setting toggle (off by default) to keep same ID across restarts.
+- Added: "Auto Answer Calls" setting toggle (off by default) to auto-accept incoming voice/video calls.
+- Added: "Reset All Settings" button in settings modal to restore all defaults.
+- Added: Incoming call notification message in chat when auto-answer is off.
+- Incremented version to 1.0.19 (v19).
+
 Update 1.0.18
 - Fixed: Permissions requested on startup (audio + camera) so calls work immediately.
 - Fixed: Removed false "call blocked" error — now shows specific reason.

@@ -498,3 +498,62 @@ footer { padding: 0.5rem; background: #333; color: #888; font-family: monospace;
     padding: 1rem;
     font-size: 0.9rem;
 }
+
+.incoming-call-dialog {
+    position: fixed;
+    z-index: 250;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.incoming-call-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 16px;
+    text-align: center;
+    width: 85%;
+    max-width: 320px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+
+.incoming-call-content h2 {
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.incoming-call-content p {
+    margin-bottom: 1.5rem;
+    font-family: monospace;
+    color: var(--secondary-color);
+}
+
+.incoming-call-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.incoming-call-buttons .call-btn {
+    width: auto;
+    height: auto;
+    padding: 0.75rem 1.5rem;
+    border-radius: 24px;
+    font-size: 1rem;
+    font-weight: bold;
+}
+
+.incoming-call-buttons .call-btn.accept {
+    background: var(--success-color);
+    color: white;
+}
+
+.incoming-call-buttons .call-btn.danger {
+    background: var(--danger-color);
+    color: white;
+}

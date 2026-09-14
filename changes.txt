@@ -1,4 +1,14 @@
 Project implementation started
+Update 1.0.29
+- Fixed: Identity (PIN + QR) now auto-generates reliably on app load. If the broker is slow, a temporary PIN is shown immediately (never stuck on "Generating...") and it auto-updates once registered.
+- Fixed: "Connect with Random User" now auto-generates an ID first if one isn't ready, then searches.
+- Fixed: Outside-network connections (pin/QR and random) improved for NAT traversal - added 9 STUN servers and a second TURN provider (turn.anyfirewall.com) alongside openrelay.metered.ca, with automatic fallback between them.
+- Added: Manual pin/QR connections retry automatically (up to 4 attempts, 8s apart) if the WebRTC handshake stalls.
+- Added: "Check for Update" button now fetches the latest GitHub release tag (e.g. v1.0.30), compares it with the installed version, reports "Update available" / "Up to date", and offers to open the download page when a newer version exists.
+- Verified: INTERNET and ACCESS_NETWORK_STATE permissions are already declared (needed for broker, STUN/TURN, public IP check and GitHub update check).
+- Updated: Connecting.txt with full details on ports, why no port-forwarding is needed, and the v1.0.29 connectivity improvements.
+- Incremented version to 1.0.29 (v29).
+
 Update 1.0.28
 - Fixed: Peer ID + QR code now reliably auto-generate on app load (auto-press "Get New ID / QR" behaviour).
   Added an identity watchdog that automatically retries peer registration (every 3-10s, forever) until an ID + QR is generated, instead of staying stuck on "Generating...".

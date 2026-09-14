@@ -4,13 +4,19 @@
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
-        { urls: 'stun:stun4.l.google.com:19302' }
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:stun.l.google.com:5349' },
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:stun.ekiga.net' },
+        { urls: 'stun:stunprotocol.org:3478' }
     ];
 
     const TURN_SERVERS = [
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:turn.anyfirewall.com:3478?transport=udp', username: 'anyfirewall', credential: 'anyfirewall' },
+        { urls: 'turn:turn.anyfirewall.com:443?transport=tcp', username: 'anyfirewall', credential: 'anyfirewall' }
     ];
 
     const LOBBY_PREFIX = 'random-p2p-lobby-';
@@ -29,6 +35,11 @@
     let identityRetryTimer = null;
     let identityRetryCount = 0;
     let identityPending = false;
+    let fallbackId = null;
+    let identityWaiters = [];
+    let connectRetryTimer = null;
+    let connectRetryCount = 0;
+    let checkingUpdate = false;
     let lobbyPeer = null;
     let lobbyConn = null;
     let blockedPeers = new Set();
@@ -108,7 +119,8 @@
         incomingCallPeer: document.getElementById('incoming-call-peer'),
         acceptCallBtn: document.getElementById('accept-call-btn'),
         declineCallBtn: document.getElementById('decline-call-btn'),
-        shareQrBtn: document.getElementById('share-qr-btn')
+        shareQrBtn: document.getElementById('share-qr-btn'),
+        appVersion: document.getElementById('app-version')
     };
 
     const settings = {
@@ -270,12 +282,14 @@
         peer = new Peer(idToUse, { config: { iceServers: iceServers, iceTransportPolicy: 'all' }, debug: 1 });
         peer.on('open', (id) => {
             localId = id;
+            fallbackId = null;
             identityPending = false;
             localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
             clearIdentityRetry();
+            notifyIdentityReady();
         });
         peer.on('connection', (connection) => {
             if (conn) { connection.close(); return; }
@@ -303,10 +317,30 @@
         identityRetryCount = 0;
     }
 
+    function showFallbackIdentity() {
+        if (localId || fallbackId) return;
+        fallbackId = 'PIN-' + generateRandomId();
+        elements.localId.textContent = fallbackId + ' (registering...)';
+        log('Server slow to respond - showing temporary ID, will auto-update once registered');
+    }
+
+    function waitForIdentity(callback) {
+        if (localId) { callback(); return; }
+        identityWaiters.push(callback);
+        if (!identityPending) initPeer();
+    }
+
+    function notifyIdentityReady() {
+        if (identityWaiters.length === 0) return;
+        const waiters = identityWaiters; identityWaiters = [];
+        waiters.forEach(fn => { try { fn(); } catch (e) { log('Identity waiter error: ' + e.message, true); } });
+    }
+
     function scheduleIdentityRetry() {
         if (!identityPending || localId) return;
         identityRetryCount++;
-        const delay = Math.min(3000 + identityRetryCount * 2000, 10000);
+        showFallbackIdentity();
+        const delay = Math.min(3000 + identityRetryCount * 1500, 10000);
         log(`Identity retry in ${Math.round(delay/1000)}s (attempt ${identityRetryCount})`);
         clearTimeout(identityRetryTimer);
         identityRetryTimer = setTimeout(() => {
@@ -345,6 +379,7 @@
         remotePeerId = conn.peer;
         isUserEndingChat = false;
         conn.on('open', () => {
+            clearConnectRetry();
             updateStatus(`Connected to ${conn.peer}`, 'status-connected');
             showChat();
             addMessage(`System: Connected to ${conn.peer}`, 'system');
@@ -397,8 +432,45 @@
 
     function connectToPeer(id) {
         if (!id) return;
+        if (!localId) {
+            log('No ID yet - generating ID first, then connecting');
+            updateStatus('Generating ID...', 'status-connecting');
+            waitForIdentity(() => {
+                if (id && id !== localId) doConnectToPeer(id);
+            });
+            return;
+        }
+        doConnectToPeer(id);
+    }
+
+    function doConnectToPeer(id) {
+        if (!id) return;
+        clearTimeout(connectRetryTimer);
         updateStatus(`Connecting...`, 'status-connecting');
-        setupConnection(peer.connect(id, { reliable: true }));
+        const c = peer.connect(id, { reliable: true });
+        setupConnection(c);
+        connectRetryCount = 0;
+        connectRetryTimer = setTimeout(() => {
+            connectRetryTimer = null;
+            if (conn && conn.open) return;
+            if (c && c.open) return;
+            if (isUserEndingChat) return;
+            connectRetryCount++;
+            log(`Connection to ${id} timed out - retrying (${connectRetryCount})`, true);
+            if (connectRetryCount < 4) {
+                doConnectToPeer(id);
+            } else {
+                connectRetryCount = 0;
+                updateStatus('Connect failed', 'status-disconnected');
+                log(`Gave up connecting to ${id} after 4 attempts`, true);
+            }
+        }, 8000);
+    }
+
+    function clearConnectRetry() {
+        clearTimeout(connectRetryTimer);
+        connectRetryTimer = null;
+        connectRetryCount = 0;
     }
 
     function handleNudge() {
@@ -411,10 +483,21 @@
     function getLobbyId() { const slot = Math.floor(Date.now() / (LOBBY_SLOT_SECS * 1000)); return LOBBY_PREFIX + slot; }
 
     function startRandomSearch() {
-        if (!localId) { log('No local ID yet', true); return; }
         if (isSearching) return;
         if (conn && conn.open) { log('Already connected', true); return; }
-        isSearching = true; searchRetryCount = 0; updateSearchUI(true); joinLobby();
+        isSearching = true; searchRetryCount = 0; updateSearchUI(true);
+        if (!localId) {
+            log('No ID yet - generating ID first');
+            elements.searchStatusText.textContent = 'Generating ID...';
+            waitForIdentity(() => {
+                if (isSearching) {
+                    elements.searchStatusText.textContent = 'Searching for a random user...';
+                    joinLobby();
+                }
+            });
+            return;
+        }
+        joinLobby();
     }
 
     function cancelRandomSearch() {
@@ -706,6 +789,61 @@
     window.onFilePicked = (file) => { if (file && conn && conn.open) { conn.send({ type: 'file', name: file.name, size: file.size, data: file.data }); addMessage(`Sent: ${file.name}`, 'system'); } };
     window.onFileSaved = (path) => { const folder = settings.saveFolder.value.trim(); if (folder) addMessage(`Saved to Downloads/${folder}`, 'system'); else addMessage('Saved to Downloads', 'system'); };
 
+    function parseVersion(v) {
+        const m = String(v || '').replace(/^v/i, '').trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+        if (!m) return null;
+        return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+    }
+
+    function compareVersions(a, b) {
+        for (let i = 0; i < 3; i++) {
+            if ((a[i] || 0) > (b[i] || 0)) return 1;
+            if ((a[i] || 0) < (b[i] || 0)) return -1;
+        }
+        return 0;
+    }
+
+    function openReleases() {
+        if (window.AndroidBridge) window.AndroidBridge.openUrl(GITHUB_REPO_URL);
+        else window.open(GITHUB_REPO_URL, '_blank');
+    }
+
+    function checkForUpdate() {
+        if (checkingUpdate) return;
+        checkingUpdate = true;
+        const btn = elements.checkUpdateBtn;
+        const original = btn.textContent;
+        btn.textContent = 'Checking...';
+        const currentText = elements.appVersion.textContent.trim();
+        const current = parseVersion(currentText);
+        fetch('https://api.github.com/repos/jnetai-clawbot/random-p2p-chat/releases/latest')
+            .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(data => {
+                const latestTag = (data.tag_name || '').trim();
+                const latest = parseVersion(latestTag);
+                if (latest && current && compareVersions(latest, current) > 0) {
+                    btn.textContent = 'Update: ' + latestTag;
+                    log(`Update available: ${latestTag} (you have ${currentText})`);
+                    if (window.confirm(`A new version is available: ${latestTag}\n\nYou have: ${currentText}\n\nOpen the download page?`)) {
+                        openReleases();
+                    }
+                } else if (latest && current) {
+                    btn.textContent = 'Up to date';
+                    log(`Up to date - you have ${currentText}, latest release is ${latestTag}`);
+                    setTimeout(() => { btn.textContent = original; }, 3000);
+                } else {
+                    log('Could not determine latest version from: ' + latestTag, true);
+                    btn.textContent = original;
+                }
+            })
+            .catch(err => {
+                log(`Update check failed: ${err.message}`, true);
+                btn.textContent = 'Check failed';
+                setTimeout(() => { btn.textContent = original; }, 3000);
+            })
+            .finally(() => { checkingUpdate = false; });
+    }
+
     elements.connectBtn.addEventListener('click', () => connectToPeer(elements.remoteIdInput.value.trim()));
     elements.sendBtn.addEventListener('click', () => { const text = elements.messageInput.value.trim(); if (text && conn && conn.open) { conn.send(JSON.stringify({ type: 'chat', text })); addMessage(text, 'sent'); elements.messageInput.value = ''; } });
     elements.endChatBtn.addEventListener('click', endCurrentChat);
@@ -747,7 +885,7 @@
     elements.copyIdBtn.addEventListener('click', () => { if (localId) { if (window.AndroidBridge) window.AndroidBridge.copyToClipboard(localId); elements.copyIdBtn.textContent = 'Copied'; setTimeout(() => elements.copyIdBtn.textContent = 'Copy', 2000); } });
     elements.pickFileBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.pickFile());
     elements.nudgeBtn.addEventListener('click', () => { if (conn && conn.open) { conn.send(JSON.stringify({ type: 'nudge' })); addMessage('Nudge sent!', 'system'); } });
-    elements.checkUpdateBtn.addEventListener('click', () => { if (window.AndroidBridge) window.AndroidBridge.openUrl(GITHUB_REPO_URL); else window.open(GITHUB_REPO_URL, '_blank'); });
+    elements.checkUpdateBtn.addEventListener('click', checkForUpdate);
     elements.shareAppBtn.addEventListener('click', () => window.AndroidBridge && window.AndroidBridge.shareApp(GITHUB_REPO_URL));
 
     elements.voiceNoteBtn.addEventListener('mousedown', startVoiceNote);

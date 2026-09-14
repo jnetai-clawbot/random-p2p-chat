@@ -11,17 +11,21 @@ anywhere with a normal internet connection. Here is what it actually uses
    - Used to register your Peer ID and exchange connection offers/answers
      (the "handshake"). This is how two devices find each other.
 
-2. STUN servers - stun*.l.google.com
-   - UDP port 19302.
+2. STUN servers - multiple public STUN servers
+   - Google STUN (stun*.l.google.com) UDP 19302 and 5349, Cloudflare STUN
+     (stun.cloudflare.com) UDP 3478, plus stun.ekiga.net and stunprotocol.org.
    - Used to discover your public IP and port so the two peers can try to
      connect directly to each other (NAT hole punching).
 
-3. TURN relay servers - openrelay.metered.ca
-   - TCP ports 80 and 443, plus UDP port 3478/443.
+3. TURN relay servers - openrelay.metered.ca + turn.anyfirewall.com
+   - openrelay.metered.ca on TCP ports 80 and 443, plus UDP 3478/443.
+   - turn.anyfirewall.com on UDP 3478 and TCP 443 (backup provider).
    - Used as a fallback relay when a direct peer-to-peer connection cannot be
      established (e.g. mobile carrier NAT / CGNAT / strict firewalls).
      TURN runs on standard HTTP(S) ports, so it works through almost any
      firewall, hotel/office network or proxy.
+   - Multiple TURN + STUN servers are tried automatically, so if one is
+     blocked or overloaded the app falls back to the next one.
 
 4. WebRTC data/media (chat, files, voice, video)
    - Direct P2P uses temporary/outbound UDP ports plus TCP fallback.
@@ -54,3 +58,34 @@ Important notes:
 
 Bottom line: no port forwarding, no firewall changes. Just normal outbound
 internet and TURN enabled. It works from anywhere online.
+
+v1.0.29 connectivity improvements
+---------------------------------
+If connections worked locally (same Wi-Fi) but failed over the internet, that
+is a WebRTC NAT-traversal (ICE) issue, not a missing port. v1.0.29 improves
+this in three ways:
+
+1. More STUN servers (9 now) and a second independent TURN provider
+   (turn.anyfirewall.com) alongside openrelay.metered.ca, so if one public
+   relay is blocked or overloaded, WebRTC automatically tries the next one.
+   Both providers use standard ports (80/443 TCP, 3478 UDP) that pass through
+   almost any firewall and work without any router port-forwarding.
+
+2. Manual pin/QR connections now retry automatically up to 4 times (8s apart)
+   if the WebRTC handshake stalls, instead of failing silently.
+
+3. Extra logging reports the exact reason if a connection fails, so the
+   cause (TURN blocked, broker unreachable, etc.) is visible in the debug log.
+
+Internet permissions:
+   The app already declares android.permission.INTERNET and
+   android.permission.ACCESS_NETWORK_STATE in AndroidManifest.xml, so it can
+   reach the broker, STUN/TURN servers, the public-IP check (api.ipify.org)
+   and the GitHub update check (api.github.com). No extra permission needed.
+
+Things to check if an outside-network connection still fails:
+   - Make sure "Enable TURN (Global P2P)" is ON in Settings (default ON).
+   - Confirm the phone has normal outbound internet (Wi-Fi or mobile data).
+   - Some very restrictive networks block all UDP; TURN-over-TCP (80/443)
+     covers that case automatically.
+   - Both users must be on the latest version of the app.

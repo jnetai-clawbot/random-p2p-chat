@@ -55,6 +55,7 @@ jobs:
         with:
           files: p2p-random-chat.apk
           name: "Release ${{ github.ref_name }}"
+          token: ${{ secrets.PAT_TOKEN }}
           body: |
             ## Random P2P Chat - ${{ github.ref_name }}
 
@@ -66,5 +67,3 @@ jobs:
             - Block and skip users
             - Public TURN server support for global connectivity
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}

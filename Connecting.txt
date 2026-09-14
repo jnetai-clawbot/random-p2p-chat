@@ -1,0 +1,56 @@
+Random P2P Chat - Connecting from anywhere online
+===================================================
+
+Q: What ports are required to let this work from anywhere online?
+A: No ports need to be opened on your router or firewall. The app works from
+anywhere with a normal internet connection. Here is what it actually uses
+(everything is an OUTBOUND connection made by the phone):
+
+1. PeerJS signaling broker - 0.peerjs.com
+   - WebSocket Secure (WSS) over TCP port 443.
+   - Used to register your Peer ID and exchange connection offers/answers
+     (the "handshake"). This is how two devices find each other.
+
+2. STUN servers - stun*.l.google.com
+   - UDP port 19302.
+   - Used to discover your public IP and port so the two peers can try to
+     connect directly to each other (NAT hole punching).
+
+3. TURN relay servers - openrelay.metered.ca
+   - TCP ports 80 and 443, plus UDP port 3478/443.
+   - Used as a fallback relay when a direct peer-to-peer connection cannot be
+     established (e.g. mobile carrier NAT / CGNAT / strict firewalls).
+     TURN runs on standard HTTP(S) ports, so it works through almost any
+     firewall, hotel/office network or proxy.
+
+4. WebRTC data/media (chat, files, voice, video)
+   - Direct P2P uses temporary/outbound UDP ports plus TCP fallback.
+   - When direct P2P fails, the data/media traffic is relayed through the
+     TURN server on TCP 443/80 - no inbound ports needed on your side.
+
+Q: Can it work without opening any ports in router or firewall?
+A: Yes. This is the preferred and default setup and requires NOTHING on your
+router or firewall:
+   - The phone is always a client; it never listens for inbound connections.
+   - STUN performs NAT hole-punching for direct peer-to-peer connections.
+   - TURN relays traffic through a public server on standard ports (443 TCP)
+     when hole-punching is not possible, so it still works on carrier NAT,
+     CGNAT and strict networks.
+   - Just make sure the "Enable TURN (Global P2P)" toggle in Settings is ON
+     (it is ON by default).
+
+Important notes:
+   - A working internet connection is needed when the app loads so your Peer
+     ID can be registered with the public PeerJS broker (0.peerjs.com).
+     Without it the ID/QR cannot be generated (this is why the app now
+     auto-retries generating the ID on load).
+   - No server-side configuration is required for normal use. The old
+     matchmaking server folder (server/) is not used by the current build -
+     random pairing uses the PeerJS lobby rendezvous system.
+   - If you ever self-host your own PeerJS broker or TURN server instead of
+     the public ones, THAT server would need inbound ports open (PeerJS on
+     TCP 443, TURN on TCP/UDP 3478 and 443/80). With the current public
+     cloud setup you never need to do this.
+
+Bottom line: no port forwarding, no firewall changes. Just normal outbound
+internet and TURN enabled. It works from anywhere online.

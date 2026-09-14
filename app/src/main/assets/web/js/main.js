@@ -26,6 +26,9 @@
     let isSearching = false;
     let searchRetryCount = 0;
     let searchRetryTimer = null;
+    let identityRetryTimer = null;
+    let identityRetryCount = 0;
+    let identityPending = false;
     let lobbyPeer = null;
     let lobbyConn = null;
     let blockedPeers = new Set();
@@ -255,6 +258,7 @@
 
     function initPeer() {
         if (peer) peer.destroy();
+        identityPending = true;
         let idToUse;
         if (settings.reuseId.checked) {
             const lastId = localStorage.getItem(LAST_ID_KEY);
@@ -266,10 +270,12 @@
         peer = new Peer(idToUse, { config: { iceServers: iceServers, iceTransportPolicy: 'all' }, debug: 1 });
         peer.on('open', (id) => {
             localId = id;
+            identityPending = false;
             localStorage.setItem(LAST_ID_KEY, id);
             elements.localId.textContent = id;
             updateStatus('Disconnected', 'status-disconnected');
             generateQrCode(id);
+            clearIdentityRetry();
         });
         peer.on('connection', (connection) => {
             if (conn) { connection.close(); return; }
@@ -287,7 +293,26 @@
         peer.on('error', (err) => {
             log(`Peer error: ${err.type}`, true);
             if (err.type === 'unavailable-id') initPeer();
+            else scheduleIdentityRetry();
         });
+        scheduleIdentityRetry();
+    }
+
+    function clearIdentityRetry() {
+        if (identityRetryTimer) { clearTimeout(identityRetryTimer); identityRetryTimer = null; }
+        identityRetryCount = 0;
+    }
+
+    function scheduleIdentityRetry() {
+        if (!identityPending || localId) return;
+        identityRetryCount++;
+        const delay = Math.min(3000 + identityRetryCount * 2000, 10000);
+        log(`Identity retry in ${Math.round(delay/1000)}s (attempt ${identityRetryCount})`);
+        clearTimeout(identityRetryTimer);
+        identityRetryTimer = setTimeout(() => {
+            identityRetryTimer = null;
+            if (identityPending && !localId) initPeer();
+        }, delay);
     }
 
     function generateQrCode(text) {

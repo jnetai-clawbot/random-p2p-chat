@@ -1,4 +1,10 @@
 Project implementation started
+Update 1.0.28
+- Fixed: Peer ID + QR code now reliably auto-generate on app load (auto-press "Get New ID / QR" behaviour).
+  Added an identity watchdog that automatically retries peer registration (every 3-10s, forever) until an ID + QR is generated, instead of staying stuck on "Generating...".
+- Added: Connecting.txt documenting required ports and confirming NO router/firewall port opening is needed (STUN + public TURN on standard ports; works from anywhere online).
+- Incremented version to 1.0.28 (v28).
+
 Update 1.0.27
 - Added: Confirmation dialog when pressing End Chat button.
 - Incremented version to 1.0.27 (v27).

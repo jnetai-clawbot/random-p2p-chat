@@ -18,8 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Verify Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls -1 "$ANDROID_HOME/platforms" | sort || true
+          ls -1 "$ANDROID_HOME/build-tools" | sort || true
+          [ -n "$ANDROID_HOME" ] && [ -n "$ANDROID_SDK_ROOT" ] && echo "SDK env OK"
 
       - name: Decode Keystore
         env:

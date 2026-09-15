@@ -8,7 +8,7 @@ Video Calls: Tap "Video Call" for audio+video with front camera. Local video sho
 Incoming calls auto-answer with the appropriate media stream.
 
 
-APK at apk/p2p-random-chat.apk (v1.0.29, versionCode=29).
+APK at apk/p2p-random-chat.apk (v1.0.30, versionCode=30).
 GitHub release: https://github.com/jnetai-clawbot/random-p2p-chat/releases
 
 Package	com.p2pchat.app

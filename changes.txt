@@ -1,4 +1,12 @@
 Project implementation started
+Update 1.0.30
+- Fixed: ID auto-generates the moment the app opens (no ID in use). If it is still "Generating" after ~1 second, the app now automatically simulates pressing the "Get New ID / QR" button (re-inits the peer) every 1-8s until an ID registers. The temporary PIN + auto-update fallback still applies so the UI is never stuck on "Generating...".
+- Fixed: Starting a manual connection (pin, QR scan result, or known-user connect) now automatically cancels any active random search first ("Cancelled random search to connect directly").
+- Fixed: Starting a random search now cancels any in-flight manual pin/QR connection attempt (closes pending connection + clears retry timer).
+- Fixed: IPv4/IPv6 toggles now behave correctly - STUN servers are included when IPv4 OR IPv6 is enabled (STUN hostnames support both address families). IPv4-only <-> IPv6-only connections work via the TURN relay (bridges address families).
+- Updated: Connecting.txt with an IPv4/IPv6 mixed-network section.
+- Incremented version to 1.0.30 (v30).
+
 Update 1.0.29
 - Fixed: Identity (PIN + QR) now auto-generates reliably on app load. If the broker is slow, a temporary PIN is shown immediately (never stuck on "Generating...") and it auto-updates once registered.
 - Fixed: "Connect with Random User" now auto-generates an ID first if one isn't ready, then searches.

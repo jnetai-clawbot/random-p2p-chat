@@ -257,7 +257,7 @@
 
     function buildIceServers() {
         const servers = [];
-        if (settings.ipv4.checked) servers.push(...STUN_SERVERS);
+        if (settings.ipv4.checked || settings.ipv6.checked) servers.push(...STUN_SERVERS);
         if (settings.useTurn.checked) {
             const turns = [...TURN_SERVERS];
             if (!settings.udp.checked) { for (let i = turns.length - 1; i >= 0; i--) { if (!turns[i].urls.includes('transport=tcp')) turns.splice(i, 1); } }
@@ -340,7 +340,7 @@
         if (!identityPending || localId) return;
         identityRetryCount++;
         showFallbackIdentity();
-        const delay = Math.min(3000 + identityRetryCount * 1500, 10000);
+        const delay = Math.min(1000 * identityRetryCount, 8000);
         log(`Identity retry in ${Math.round(delay/1000)}s (attempt ${identityRetryCount})`);
         clearTimeout(identityRetryTimer);
         identityRetryTimer = setTimeout(() => {
@@ -432,6 +432,10 @@
 
     function connectToPeer(id) {
         if (!id) return;
+        if (isSearching) {
+            log('Cancelled random search to connect directly');
+            cancelRandomSearch();
+        }
         if (!localId) {
             log('No ID yet - generating ID first, then connecting');
             updateStatus('Generating ID...', 'status-connecting');
@@ -485,6 +489,7 @@
     function startRandomSearch() {
         if (isSearching) return;
         if (conn && conn.open) { log('Already connected', true); return; }
+        cancelPendingConnect();
         isSearching = true; searchRetryCount = 0; updateSearchUI(true);
         if (!localId) {
             log('No ID yet - generating ID first');
@@ -498,6 +503,16 @@
             return;
         }
         joinLobby();
+    }
+
+    function cancelPendingConnect() {
+        clearConnectRetry();
+        if (conn && !conn.open) {
+            try { conn.close(); } catch (e) {}
+            conn = null;
+            remotePeerId = null;
+        }
+        updateStatus('Disconnected', 'status-disconnected');
     }
 
     function cancelRandomSearch() {

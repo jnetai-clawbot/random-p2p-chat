@@ -89,3 +89,17 @@ Things to check if an outside-network connection still fails:
    - Some very restrictive networks block all UDP; TURN-over-TCP (80/443)
      covers that case automatically.
    - Both users must be on the latest version of the app.
+
+IPv4 and IPv6 (mixed networks)
+   - A user on an IPv6 network and a user on an IPv4 network WILL still
+     connect. WebRTC gathers both IPv4 and IPv6 candidates automatically
+     (iceTransportPolicy is "all"), so dual-stack phones connect directly,
+     often over IPv6.
+   - A pure-IPv4 phone and a pure-IPv6 phone cannot talk directly, but the
+     TURN relay bridges them: both reach the relay (openrelay.metered.ca /
+     turn.anyfirewall.com resolve to both IPv4 and IPv6) and the relay
+     forwards the traffic. So IPv4 <-> IPv6 works as long as TURN is on.
+   - The IPv4/IPv6 toggles in Settings simply control whether STUN is
+     included (STUN hostnames such as Google/Cloudflare support both
+     address families). TURN-on is what makes mixed IP-version connections
+     work.
